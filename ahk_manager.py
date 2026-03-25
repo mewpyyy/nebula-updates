@@ -11,7 +11,7 @@ import urllib.request
 import urllib.error
 
 # ── Version & auto-update ─────────────────────────────────────────────────────
-CURRENT_VERSION = "1.1.2"
+CURRENT_VERSION = "1.1.3"
 # ▼▼ Replace these URLs with your actual web server paths ▼▼
 UPDATE_VERSION_URL = "https://mewpyyy.github.io/nebula-updates/version.json"
 UPDATE_SCRIPT_URL  = "https://mewpyyy.github.io/nebula-updates/ahk_manager.py"
@@ -1154,6 +1154,13 @@ class ToggleSwitch(tk.Frame):
         self._canvas.config(bg=theme["card_bg"])
         self._draw()
 
+    def set_glow(self, active, color):
+        """Show a subtle glow outline on hover."""
+        if active and color:
+            self._canvas.config(highlightthickness=1, highlightbackground=color)
+        else:
+            self._canvas.config(highlightthickness=0)
+
     def set_state(self, pos):
         """Set position with smooth animation: 0=stopped, 1=running, 2=active"""
         if pos == self._pos:
@@ -1547,6 +1554,31 @@ class AHKManager(tk.Tk):
         inner = tk.Frame(outer, bg=t["card_bg"], padx=18, pady=12)
         inner.pack(fill="x")
 
+        # ── Hover glow helpers
+        def _dim_color(hex_col, factor=0.4):
+            """Return a dimmed version of a hex colour for subtle glow."""
+            hex_col = hex_col.lstrip("#")
+            r, g, b = int(hex_col[0:2],16), int(hex_col[2:4],16), int(hex_col[4:6],16)
+            r = int(r * factor); g = int(g * factor); b = int(b * factor)
+            return f"#{r:02x}{g:02x}{b:02x}"
+
+        glow_color    = t["accent"]
+        glow_dim      = _dim_color(t["accent"], 0.35)
+        tog_glow      = _dim_color(t["running"], 0.5)
+
+        def on_enter(e):
+            outer.config(highlightbackground=glow_color, highlightthickness=2)
+            tog.set_glow(True, tog_glow)
+
+        def on_leave(e):
+            outer.config(highlightbackground=t["border"], highlightthickness=1)
+            tog.set_glow(False, None)
+
+        # Bind hover to all widgets inside the card
+        for widget in [outer, inner]:
+            widget.bind("<Enter>", on_enter)
+            widget.bind("<Leave>", on_leave)
+
         # ── Favourite star
         star_char = "★" if is_fav else "☆"
         star_lbl = tk.Label(inner, text=star_char,
@@ -1555,6 +1587,8 @@ class AHKManager(tk.Tk):
                              cursor="hand2")
         star_lbl.pack(side="left", padx=(0, 8))
         star_lbl.bind("<Button-1>", lambda e, f=fn, sl=star_lbl: self._toggle_fav(f, sl))
+        star_lbl.bind("<Enter>", on_enter)
+        star_lbl.bind("<Leave>", on_leave)
 
         left = tk.Frame(inner, bg=t["card_bg"])
         left.pack(side="left", fill="x", expand=True)
@@ -1572,6 +1606,10 @@ class AHKManager(tk.Tk):
                               bg=t["card_bg"], fg=t["subtext"], anchor="w")
         stats_lbl.pack(anchor="w", pady=(1, 0))
 
+        for widget in [left, name_lbl, file_lbl, stats_lbl]:
+            widget.bind("<Enter>", on_enter)
+            widget.bind("<Leave>", on_leave)
+
         right = tk.Frame(inner, bg=t["card_bg"])
         right.pack(side="right", padx=(12, 0))
 
@@ -1579,12 +1617,19 @@ class AHKManager(tk.Tk):
         sl = tk.Label(right, textvariable=sv, font=self.font_status,
                       bg=t["card_bg"], fg=t["stopped"], width=9, anchor="e")
         sl.pack(anchor="e", pady=(0, 8))
+        sl.bind("<Enter>", on_enter)
+        sl.bind("<Leave>", on_leave)
 
         tog = ToggleSwitch(right, theme=t,
                            callback=lambda state, i=info, s=sv, l=sl, tg=None:
                                self._toggle(state, i, s, l, tg))
         tog._callback = lambda state, i=info, s=sv, l=sl, tg=tog: self._toggle(state, i, s, l, tg)
         tog.pack(anchor="e")
+        tog._canvas.bind("<Enter>", on_enter)
+        tog._canvas.bind("<Leave>", on_leave)
+
+        right.bind("<Enter>", on_enter)
+        right.bind("<Leave>", on_leave)
 
         return {
             "frame": outer, "inner": inner, "left": left, "right": right,
@@ -1592,6 +1637,7 @@ class AHKManager(tk.Tk):
             "star_lbl": star_lbl,
             "status_lbl": sl, "status_var": sv, "toggle": tog,
             "info": info,
+            "on_enter": on_enter, "on_leave": on_leave,
         }
 
     # ── Theme application ─────────────────────────────────────────────────────
@@ -1951,7 +1997,7 @@ class AHKManager(tk.Tk):
         win.geometry(f"+{px}+{py}")
 
     def _download_and_restart(self):
-        """Download latest script and use a helper batch to swap it after app exits."""
+        """Download latest script, swap it, tell user to reopen."""
         try:
             is_frozen = getattr(sys, "frozen", False)
 
@@ -1961,23 +2007,20 @@ class AHKManager(tk.Tk):
                 py_path  = os.path.join(exe_dir, "ahk_manager.py")
             else:
                 py_path  = os.path.abspath(sys.argv[0])
-                exe_path = sys.executable
                 exe_dir  = os.path.dirname(py_path)
 
             backup_path = py_path + ".bak"
 
-            # Clean up any leftover temp files from previous failed attempts
+            # Clean up leftover temp files
             tmp_dir = tempfile.gettempdir()
             for f in os.listdir(tmp_dir):
                 if f.startswith("nebula_update_") or f.startswith("_nebula_update_"):
                     try: os.remove(os.path.join(tmp_dir, f))
                     except Exception: pass
 
-            # Download to system temp folder with a unique name each time
+            # Download to temp
             import uuid
             tmp_path = os.path.join(tempfile.gettempdir(), f"nebula_update_{uuid.uuid4().hex}.py")
-
-            # Use urlopen instead of urlretrieve for better control
             req = urllib.request.Request(
                 UPDATE_SCRIPT_URL,
                 headers={"Cache-Control": "no-cache", "User-Agent": "Nebula-Updater"}
@@ -1985,48 +2028,21 @@ class AHKManager(tk.Tk):
             with urllib.request.urlopen(req, timeout=15) as resp:
                 content_bytes = resp.read()
 
-            # Write to temp file
             with open(tmp_path, "wb") as f:
                 f.write(content_bytes)
 
-            # Sanity check
             content = content_bytes.decode("utf-8")
             if "AHKManager" not in content:
                 os.remove(tmp_path)
                 raise ValueError("Downloaded file doesn't look like Nebula — aborting.")
 
-            # Write updater batch to system temp too
+            # Write batch just to swap the file after app closes
             bat_path = os.path.join(tempfile.gettempdir(), f"_nebula_update_{uuid.uuid4().hex}.bat")
-            pid      = os.getpid()
-            relaunch = f'"{exe_path}"' if is_frozen else f'"{sys.executable}" "{py_path}"'
-
             bat = f"""@echo off
-set LOG=%TEMP%\\nebula_update_log.txt
-echo Starting update... > %LOG%
-:wait
-tasklist /FI "PID eq {pid}" 2>NUL | find "{pid}" >NUL
-if not errorlevel 1 (
-    timeout /t 1 /nobreak >NUL
-    goto wait
-)
-echo Process exited, swapping files... >> %LOG%
+ping 127.0.0.1 -n 4 >NUL
 if exist "{backup_path}" del /f /q "{backup_path}"
-if exist "{py_path}" (
-    move /y "{py_path}" "{backup_path}"
-    echo Backed up old file >> %LOG%
-) else (
-    echo No existing py file to backup >> %LOG%
-)
+if exist "{py_path}" move /y "{py_path}" "{backup_path}"
 move /y "{tmp_path}" "{py_path}"
-if errorlevel 1 (
-    echo FAILED to move update file >> %LOG%
-) else (
-    echo File swapped successfully >> %LOG%
-)
-echo Relaunching: {exe_path} >> %LOG%
-timeout /t 1 /nobreak >NUL
-start "" "{exe_path}"
-echo Done >> %LOG%
 del /f /q "%~f0"
 """
             with open(bat_path, "w") as f:
@@ -2038,13 +2054,15 @@ del /f /q "%~f0"
                 except Exception: pass
             shutil.rmtree(self.tmp_dir, ignore_errors=True)
 
-            # Launch the batch script fully detached then exit
             subprocess.Popen(
                 ["cmd.exe", "/c", bat_path],
                 creationflags=subprocess.DETACHED_PROCESS,
                 close_fds=True,
                 shell=False
             )
+
+            messagebox.showinfo("Update Downloaded",
+                                "Nebula has been updated!\n\nPlease reopen the app to use the new version.")
             self.destroy()
 
         except Exception as ex:
