@@ -1938,32 +1938,51 @@ class AHKManager(tk.Tk):
         win.geometry(f"+{px}+{py}")
 
     def _download_and_restart(self):
-        """Download latest script, replace self, and restart."""
+        """Download latest script, replace self, and restart.
+        Works whether running as a compiled .exe or a plain .py file.
+        """
         try:
-            script_path = os.path.abspath(sys.argv[0])
-            backup_path = script_path + ".bak"
+            is_frozen = getattr(sys, "frozen", False)  # True when running as .exe
 
-            # Download to temp file first
-            tmp_path = script_path + ".update_tmp"
+            if is_frozen:
+                # Running as .exe — download the new .py next to the .exe
+                exe_path  = os.path.abspath(sys.executable)
+                exe_dir   = os.path.dirname(exe_path)
+                py_path   = os.path.join(exe_dir, "ahk_manager.py")
+            else:
+                # Running as plain .py
+                py_path   = os.path.abspath(sys.argv[0])
+                exe_path  = None
+
+            backup_path = py_path + ".bak"
+            tmp_path    = py_path + ".update_tmp"
+
+            # Download new script
             urllib.request.urlretrieve(UPDATE_SCRIPT_URL, tmp_path)
 
-            # Quick sanity check — make sure it's a Python file
+            # Sanity check
             with open(tmp_path, "r", encoding="utf-8") as f:
                 content = f.read()
             if "AHKManager" not in content:
                 raise ValueError("Downloaded file doesn't look like Nebula — aborting.")
 
-            # Backup current, replace with new
-            shutil.copy2(script_path, backup_path)
-            shutil.move(tmp_path, script_path)
+            # Backup old, put new in place
+            if os.path.exists(py_path):
+                shutil.copy2(py_path, backup_path)
+            shutil.move(tmp_path, py_path)
 
-            # Stop all scripts and restart
+            # Stop all running scripts
             for proc in self.procs.values():
                 try: proc.terminate()
                 except Exception: pass
             shutil.rmtree(self.tmp_dir, ignore_errors=True)
 
-            subprocess.Popen([sys.executable, script_path])
+            if is_frozen:
+                # Restart the .exe — it will pick up the new .py on next launch
+                subprocess.Popen([exe_path])
+            else:
+                subprocess.Popen([sys.executable, py_path])
+
             self.destroy()
 
         except Exception as ex:
@@ -2343,6 +2362,15 @@ class CreateAccountScreen(tk.Toplevel):
 
 
 if __name__ == "__main__":
+    # ── If running as .exe, check if an updated .py is sitting next to it ──
+    if getattr(sys, "frozen", False):
+        exe_dir    = os.path.dirname(os.path.abspath(sys.executable))
+        updated_py = os.path.join(exe_dir, "ahk_manager.py")
+        if os.path.exists(updated_py):
+            # Launch the updated script with the bundled Python and exit the exe
+            subprocess.Popen([sys.executable, updated_py])
+            sys.exit(0)
+
     while True:
         session = load_session()
         auto_login = (session and validate_user_remote(session.get("user",""), session.get("pw","")))
