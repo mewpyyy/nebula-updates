@@ -11,7 +11,7 @@ import urllib.request
 import urllib.error
 
 # ── Version & auto-update ─────────────────────────────────────────────────────
-CURRENT_VERSION = "1.1.6"
+CURRENT_VERSION = "1.1.7"
 # ▼▼ Replace these URLs with your actual web server paths ▼▼
 UPDATE_VERSION_URL = "https://mewpyyy.github.io/nebula-updates/version.json"
 UPDATE_SCRIPT_URL  = "https://mewpyyy.github.io/nebula-updates/ahk_manager.py"
@@ -2002,6 +2002,7 @@ class AHKManager(tk.Tk):
             if is_frozen:
                 exe_path = os.path.abspath(sys.executable)
                 exe_dir  = os.path.dirname(exe_path)
+                # In onedir mode, ahk_manager.py lives in the same folder as Nebula.exe
                 py_path  = os.path.join(exe_dir, "ahk_manager.py")
             else:
                 py_path  = os.path.abspath(sys.argv[0])
@@ -2034,29 +2035,16 @@ class AHKManager(tk.Tk):
                 os.remove(tmp_path)
                 raise ValueError("Downloaded file doesn't look like Nebula — aborting.")
 
-            # Write batch just to swap the file after app closes
-            bat_path = os.path.join(tempfile.gettempdir(), f"_nebula_update_{uuid.uuid4().hex}.bat")
-            bat = f"""@echo off
-if exist "{backup_path}" del /f /q "{backup_path}"
-if exist "{py_path}" move /y "{py_path}" "{backup_path}"
-move /y "{tmp_path}" "{py_path}"
-del /f /q "%~f0"
-"""
-            with open(bat_path, "w") as f:
-                f.write(bat)
+            # Directly overwrite ahk_manager.py in the exe folder
+            if os.path.exists(py_path):
+                shutil.copy2(py_path, backup_path)
+            shutil.move(tmp_path, py_path)
 
             # Stop all running AHK scripts
             for proc in self.procs.values():
                 try: proc.terminate()
                 except Exception: pass
             shutil.rmtree(self.tmp_dir, ignore_errors=True)
-
-            subprocess.Popen(
-                ["cmd.exe", "/c", bat_path],
-                creationflags=subprocess.DETACHED_PROCESS,
-                close_fds=True,
-                shell=False
-            )
 
             messagebox.showinfo("Update Downloaded",
                                 "Nebula has been updated!\n\nPlease reopen the app to use the new version.")
@@ -2439,6 +2427,16 @@ class CreateAccountScreen(tk.Toplevel):
 
 
 if __name__ == "__main__":
+    # ── onedir mode: if an ahk_manager.py exists next to the exe, run it ──
+    if getattr(sys, "frozen", False):
+        exe_dir    = os.path.dirname(os.path.abspath(sys.executable))
+        updated_py = os.path.join(exe_dir, "ahk_manager.py")
+        if os.path.exists(updated_py):
+            import importlib.util
+            spec = importlib.util.spec_from_file_location("ahk_manager", updated_py)
+            mod  = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            sys.exit(0)
 
     while True:
         session = load_session()
