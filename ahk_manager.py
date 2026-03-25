@@ -11,7 +11,7 @@ import urllib.request
 import urllib.error
 
 # ── Version & auto-update ─────────────────────────────────────────────────────
-CURRENT_VERSION = "1.0.5"
+CURRENT_VERSION = "1.0.6"
 # ▼▼ Replace these URLs with your actual web server paths ▼▼
 UPDATE_VERSION_URL = "https://mewpyyy.github.io/nebula-updates/version.json"
 UPDATE_SCRIPT_URL  = "https://mewpyyy.github.io/nebula-updates/ahk_manager.py"
@@ -2001,17 +2001,32 @@ class AHKManager(tk.Tk):
             relaunch = f'"{exe_path}"' if is_frozen else f'"{sys.executable}" "{py_path}"'
 
             bat = f"""@echo off
+set LOG=%TEMP%\\nebula_update_log.txt
+echo Starting update... > %LOG%
 :wait
 tasklist /FI "PID eq {pid}" 2>NUL | find "{pid}" >NUL
 if not errorlevel 1 (
     timeout /t 1 /nobreak >NUL
     goto wait
 )
+echo Process exited, swapping files... >> %LOG%
 if exist "{backup_path}" del /f /q "{backup_path}"
-if exist "{py_path}" move /y "{py_path}" "{backup_path}"
+if exist "{py_path}" (
+    move /y "{py_path}" "{backup_path}"
+    echo Backed up old file >> %LOG%
+) else (
+    echo No existing py file to backup >> %LOG%
+)
 move /y "{tmp_path}" "{py_path}"
+if errorlevel 1 (
+    echo FAILED to move update file >> %LOG%
+) else (
+    echo File swapped successfully >> %LOG%
+)
+echo Relaunching: {exe_path} >> %LOG%
 timeout /t 1 /nobreak >NUL
 start "" "{exe_path}"
+echo Done >> %LOG%
 del /f /q "%~f0"
 """
             with open(bat_path, "w") as f:
@@ -2026,8 +2041,9 @@ del /f /q "%~f0"
             # Launch the batch script fully detached then exit
             subprocess.Popen(
                 ["cmd.exe", "/c", bat_path],
-                creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS,
-                close_fds=True
+                creationflags=subprocess.DETACHED_PROCESS,
+                close_fds=True,
+                shell=False
             )
             self.destroy()
 
