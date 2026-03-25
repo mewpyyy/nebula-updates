@@ -13,15 +13,82 @@ import urllib.error
 # ── Version & auto-update ─────────────────────────────────────────────────────
 CURRENT_VERSION = "1.0.0"
 # ▼▼ Replace these URLs with your actual web server paths ▼▼
-UPDATE_VERSION_URL = "https://yourserver.com/nebula/version.json"
-UPDATE_SCRIPT_URL  = "https://yourserver.com/nebula/ahk_manager.py"
+UPDATE_VERSION_URL = "https://mewpyyy.github.io/nebula-updates/version.json"
+UPDATE_SCRIPT_URL  = "https://mewpyyy.github.io/nebula-updates/ahk_manager.py"
 # ▲▲ ─────────────────────────────────────────────────────────────────────── ▲▲
 
 # ── Users (add/remove entries here to manage access) ─────────────────────────
 USERS = {
-    "Physica": "Physica67",
-    # "AnotherUser": "TheirPassword",   ← example: uncomment & fill in
+    "Physica": "PhysiaAdmin1",   # ← admin account, never remove this
 }
+
+# ── GitHub account system ─────────────────────────────────────────────────────
+GITHUB_REPO   = "mewpyyy/nebula-updates"
+GITHUB_BRANCH = "main"
+USERS_FILE    = "users.json"
+# ▼▼ Paste your GitHub Personal Access Token here ▼▼
+GITHUB_TOKEN  = "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"
+# ▲▲ ──────────────────────────────────────────── ▲▲
+# How to get a token:
+#   GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)
+#   → Generate new token → tick "repo" scope → copy and paste above
+
+GITHUB_API_BASE = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{USERS_FILE}"
+
+def _github_headers():
+    return {
+        "Authorization": f"token {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github.v3+json",
+        "Content-Type": "application/json",
+    }
+
+def fetch_remote_users():
+    """Fetch users.json from GitHub. Returns (dict_of_users, sha) or ({}, None)."""
+    try:
+        req = urllib.request.Request(GITHUB_API_BASE, headers=_github_headers())
+        resp = urllib.request.urlopen(req, timeout=6)
+        data = json.loads(resp.read().decode())
+        import base64
+        content = base64.b64decode(data["content"]).decode("utf-8")
+        users = json.loads(content)
+        return users, data["sha"]
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            # File doesn't exist yet — that's fine, we'll create it
+            return {}, None
+        return {}, None
+    except Exception:
+        return {}, None
+
+def push_remote_users(users, sha=None):
+    """Push updated users dict back to GitHub. sha required for updates."""
+    import base64
+    content = base64.b64encode(json.dumps(users, indent=2).encode()).decode()
+    payload = {
+        "message": "Nebula: update users",
+        "content": content,
+        "branch": GITHUB_BRANCH,
+    }
+    if sha:
+        payload["sha"] = sha
+    data = json.dumps(payload).encode()
+    req = urllib.request.Request(GITHUB_API_BASE, data=data,
+                                  headers=_github_headers(), method="PUT")
+    try:
+        urllib.request.urlopen(req, timeout=10)
+        return True, ""
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        return False, f"HTTP {e.code}: {body}"
+    except Exception as ex:
+        return False, str(ex)
+
+def validate_user_remote(username, password):
+    """Check credentials against GitHub users.json. Falls back to local USERS."""
+    if USERS.get(username) == password:
+        return True
+    remote, _ = fetch_remote_users()
+    return remote.get(username) == password
 
 # ── Stats / Favourites files ──────────────────────────────────────────────────
 STATS_FILE = os.path.join(os.path.expanduser("~"), ".ahkmanager_stats.json")
@@ -1269,10 +1336,12 @@ def resource_path(relative_path):
 
 
 class AHKManager(tk.Tk):
-    def __init__(self):
+    def __init__(self, current_user=""):
         super().__init__()
         self.title("Nebula")
         self.resizable(True, True)
+        self._current_user = current_user
+        self._is_admin = (current_user == "Physica")
         try:
             self.iconbitmap(resource_path("nebula.ico"))
         except Exception:
@@ -1350,6 +1419,15 @@ class AHKManager(tk.Tk):
                                  highlightbackground=t["border"], highlightthickness=1)
         self._kb_btn.pack(side="right", padx=(0, 8))
         self._kb_btn.bind("<Button-1>", lambda e: self._open_keybind_editor())
+
+        # Admin panel button (Physica only)
+        if self._is_admin:
+            self._admin_btn = tk.Label(self._header, text="👥 Users", font=self.font_badge,
+                                        bg=t["card_bg"], fg=t["running"], padx=10, pady=5,
+                                        cursor="hand2", relief="flat",
+                                        highlightbackground=t["border"], highlightthickness=1)
+            self._admin_btn.pack(side="right", padx=(0, 8))
+            self._admin_btn.bind("<Button-1>", lambda e: self._open_admin_panel())
 
         if not self.ahk_path:
             self._no_ahk_lbl = tk.Label(self._header, text="⚠  AutoHotkey not found",
@@ -1522,6 +1600,9 @@ class AHKManager(tk.Tk):
                                highlightbackground=t["border"])
         self._kb_btn.config(bg=t["card_bg"], fg=t["accent"],
                              highlightbackground=t["border"])
+        if self._is_admin and hasattr(self, "_admin_btn"):
+            self._admin_btn.config(bg=t["card_bg"], fg=t["running"],
+                                    highlightbackground=t["border"])
         self._div1.config(bg=t["border"])
         self._div2.config(bg=t["border"])
         self._toolbar.config(bg=t["bg"])
@@ -1889,6 +1970,85 @@ class AHKManager(tk.Tk):
             messagebox.showerror("Update Failed",
                                   f"Could not update Nebula:\n\n{ex}\n\nYour current version is unchanged.")
 
+    # ── Admin panel ───────────────────────────────────────────────────────────
+    def _open_admin_panel(self):
+        t = self._theme
+        win = tk.Toplevel(self)
+        win.title("User Management")
+        win.resizable(False, False)
+        win.configure(bg=t["bg"])
+        win.grab_set()
+
+        tk.Label(win, text="User Management", bg=t["bg"], fg=t["accent"],
+                 font=self.font_name, pady=14).pack()
+        tk.Frame(win, bg=t["border"], height=1).pack(fill="x", padx=20)
+
+        # Status label at top
+        status_var = tk.StringVar()
+        status_lbl = tk.Label(win, textvariable=status_var, font=self.font_file,
+                               bg=t["bg"], fg=t["running"])
+        status_lbl.pack(pady=(6, 0))
+
+        list_frame = tk.Frame(win, bg=t["bg"], padx=20, pady=10)
+        list_frame.pack(fill="both")
+
+        def refresh():
+            for w in list_frame.winfo_children():
+                w.destroy()
+            remote_users, sha = fetch_remote_users()
+            if not remote_users:
+                tk.Label(list_frame, text="Could not load users from GitHub.",
+                         font=self.font_file, bg=t["bg"], fg=t["accent2"]).pack()
+                return
+            tk.Label(list_frame, text=f"{'USERNAME':<22} {'CREATED':<12}  ACTION",
+                     font=self.font_file, bg=t["bg"], fg=t["subtext"],
+                     anchor="w").pack(fill="x", pady=(0, 4))
+            tk.Frame(list_frame, bg=t["border"], height=1).pack(fill="x", pady=(0, 6))
+            for uname in list(remote_users.keys()):
+                row = tk.Frame(list_frame, bg=t["card_bg"],
+                                highlightbackground=t["border"], highlightthickness=1)
+                row.pack(fill="x", pady=3, ipady=6)
+                tk.Label(row, text=uname, font=self.font_file, bg=t["card_bg"],
+                          fg=t["text"], width=22, anchor="w", padx=8).pack(side="left")
+                def delete(u=uname):
+                    remote, s = fetch_remote_users()
+                    if u in remote:
+                        del remote[u]
+                        ok, _ = push_remote_users(remote, s)
+                        if ok:
+                            status_var.set(f"✓ Deleted '{u}'")
+                            status_lbl.config(fg=t["running"])
+                        else:
+                            status_var.set(f"✗ Failed to delete '{u}'")
+                            status_lbl.config(fg=t["accent2"])
+                        refresh()
+                del_btn = tk.Label(row, text="Delete", font=self.font_badge,
+                                    bg=t["accent2"], fg="#ffffff", padx=8, pady=2,
+                                    cursor="hand2")
+                del_btn.pack(side="right", padx=8)
+                del_btn.bind("<Button-1>", lambda e, u=uname: delete(u))
+
+            tk.Label(list_frame, text=f"{len(remote_users)} account(s) on file",
+                     font=self.font_file, bg=t["bg"], fg=t["subtext"]).pack(pady=(8, 0))
+
+        refresh()
+
+        tk.Frame(win, bg=t["border"], height=1).pack(fill="x", padx=20, pady=(6, 0))
+        btn_row = tk.Frame(win, bg=t["bg"], pady=10)
+        btn_row.pack()
+        for text, cmd, col in [("Refresh", refresh, t["accent"]),
+                                ("Close",   win.destroy, t["accent2"])]:
+            b = tk.Label(btn_row, text=text, font=self.font_badge,
+                          bg=t["card_bg"], fg=col, padx=14, pady=7,
+                          cursor="hand2", highlightbackground=t["border"], highlightthickness=1)
+            b.pack(side="left", padx=6)
+            b.bind("<Button-1>", lambda e, c=cmd: c())
+
+        win.update_idletasks()
+        px = self.winfo_x() + (self.winfo_width()  - win.winfo_width())  // 2
+        py = self.winfo_y() + (self.winfo_height() - win.winfo_height()) // 2
+        win.geometry(f"+{px}+{py}")
+
     def _logout(self):
         clear_session()
         for proc in self.procs.values():
@@ -1913,6 +2073,7 @@ class LoginScreen(tk.Tk):
         self.resizable(False, False)
         self.configure(bg="#0d0010")
         self._success = False
+        self._logged_user = None
 
         try:
             self.iconbitmap(resource_path("nebula.ico"))
@@ -1997,6 +2158,16 @@ class LoginScreen(tk.Tk):
         self._pass_entry.bind("<Return>", lambda e: self._attempt())
         self._user_entry.bind("<Return>", lambda e: self._pass_entry.focus())
 
+        # Create account link
+        reg_frame = tk.Frame(wrap, bg="#0d0010")
+        reg_frame.pack(pady=(14, 0))
+        tk.Label(reg_frame, text="Don't have an account?", font=font_sub,
+                 bg="#0d0010", fg="#6b21a8").pack(side="left")
+        reg_lnk = tk.Label(reg_frame, text=" Sign up", font=tkfont.Font(family="Segoe UI", size=9, underline=True),
+                            bg="#0d0010", fg="#a855f7", cursor="hand2")
+        reg_lnk.pack(side="left")
+        reg_lnk.bind("<Button-1>", lambda e: self._open_register())
+
         # Centre window
         self.update_idletasks()
         w, h = self.winfo_width(), self.winfo_height()
@@ -2015,14 +2186,20 @@ class LoginScreen(tk.Tk):
             self._user_entry.focus()
 
     def _attempt(self):
-        user = self._user_var.get()
+        user = self._user_var.get().strip()
         pw   = self._pass_var.get()
-        if USERS.get(user) == pw:
+        if not user or not pw:
+            self._err_var.set("please enter username and password")
+            return
+        self._err_var.set("checking...")
+        self.update()
+        if validate_user_remote(user, pw):
             if self._remember_var.get():
                 save_session(user, pw)
             else:
                 clear_session()
             self._success = True
+            self._logged_user = user
             self.destroy()
         else:
             self._err_var.set("incorrect username or password")
@@ -2030,12 +2207,147 @@ class LoginScreen(tk.Tk):
             self._pass_entry.focus()
 
 
+    def _open_register(self):
+        CreateAccountScreen(self)
+
+
+class CreateAccountScreen(tk.Toplevel):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.title("Nebula — Create Account")
+        self.resizable(False, False)
+        self.configure(bg="#0d0010")
+        self.grab_set()
+
+        font_title = tkfont.Font(family="Segoe Script", size=16, weight="bold")
+        font_sub   = tkfont.Font(family="Segoe UI", size=9)
+        font_label = tkfont.Font(family="Segoe UI", size=8, weight="bold")
+        font_entry = tkfont.Font(family="Segoe UI", size=11)
+        font_err   = tkfont.Font(family="Segoe UI", size=8)
+        font_btn   = tkfont.Font(family="Segoe UI", size=10, weight="bold")
+
+        wrap = tk.Frame(self, bg="#0d0010", padx=48, pady=36)
+        wrap.pack()
+
+        tk.Label(wrap, text="⬡ Nebula", font=font_title,
+                 bg="#0d0010", fg="#c084fc").pack(pady=(0, 2))
+        tk.Label(wrap, text="create a new account", font=font_sub,
+                 bg="#0d0010", fg="#6b21a8").pack(pady=(0, 20))
+
+        # Username
+        tk.Label(wrap, text="USERNAME", font=font_label,
+                 bg="#0d0010", fg="#a855f7", anchor="w").pack(fill="x")
+        self._user_var = tk.StringVar()
+        self._user_entry = tk.Entry(wrap, textvariable=self._user_var,
+                                     font=font_entry, bg="#1a0030", fg="#e9d5ff",
+                                     insertbackground="#c084fc", relief="flat", bd=0,
+                                     highlightthickness=1, highlightbackground="#4c1d95",
+                                     highlightcolor="#a855f7")
+        self._user_entry.pack(fill="x", ipady=8, pady=(4, 14))
+
+        # Password
+        tk.Label(wrap, text="PASSWORD", font=font_label,
+                 bg="#0d0010", fg="#a855f7", anchor="w").pack(fill="x")
+        self._pass_var = tk.StringVar()
+        self._pass_entry = tk.Entry(wrap, textvariable=self._pass_var,
+                                     font=font_entry, bg="#1a0030", fg="#e9d5ff",
+                                     insertbackground="#c084fc", relief="flat", bd=0,
+                                     show="•", highlightthickness=1,
+                                     highlightbackground="#4c1d95", highlightcolor="#a855f7")
+        self._pass_entry.pack(fill="x", ipady=8, pady=(4, 14))
+
+        # Confirm Password
+        tk.Label(wrap, text="CONFIRM PASSWORD", font=font_label,
+                 bg="#0d0010", fg="#a855f7", anchor="w").pack(fill="x")
+        self._conf_var = tk.StringVar()
+        self._conf_entry = tk.Entry(wrap, textvariable=self._conf_var,
+                                     font=font_entry, bg="#1a0030", fg="#e9d5ff",
+                                     insertbackground="#c084fc", relief="flat", bd=0,
+                                     show="•", highlightthickness=1,
+                                     highlightbackground="#4c1d95", highlightcolor="#a855f7")
+        self._conf_entry.pack(fill="x", ipady=8, pady=(4, 16))
+
+        # Status label
+        self._status_var = tk.StringVar()
+        tk.Label(wrap, textvariable=self._status_var, font=font_err,
+                 bg="#0d0010", fg="#f87171").pack(pady=(0, 10))
+
+        # Create button
+        btn = tk.Label(wrap, text="CREATE ACCOUNT", font=font_btn,
+                       bg="#4c1d95", fg="#e9d5ff", padx=24, pady=10,
+                       cursor="hand2", relief="flat")
+        btn.pack()
+        btn.bind("<Button-1>", lambda e: self._create())
+        self._conf_entry.bind("<Return>", lambda e: self._create())
+
+        self.update_idletasks()
+        px = parent.winfo_x() + (parent.winfo_width()  - self.winfo_width())  // 2
+        py = parent.winfo_y() + (parent.winfo_height() - self.winfo_height()) // 2
+        self.geometry(f"+{px}+{py}")
+        self._user_entry.focus()
+
+    def _create(self):
+        user = self._user_var.get().strip()
+        pw   = self._pass_var.get()
+        conf = self._conf_var.get()
+
+        # Validation
+        if not user or not pw:
+            self._status_var.set("username and password are required"); return
+        if len(user) < 3:
+            self._status_var.set("username must be at least 3 characters"); return
+        if len(pw) < 6:
+            self._status_var.set("password must be at least 6 characters"); return
+        if pw != conf:
+            self._status_var.set("passwords do not match"); return
+        if user in USERS:
+            self._status_var.set("that username is taken"); return
+
+        self._status_var.set("creating account...")
+        self.config(cursor="watch")
+        self.update()
+
+        # Fetch existing remote users
+        remote_users, sha = fetch_remote_users()
+
+        if user in remote_users:
+            self._status_var.set("that username is already taken")
+            self.config(cursor="")
+            return
+
+        # Add new user and push
+        remote_users[user] = pw
+        success, err_msg = push_remote_users(remote_users, sha)
+
+        self.config(cursor="")
+        if success:
+            self._status_var.set("")
+            self.configure(bg="#0d0010")
+            # Show success
+            for w in self.winfo_children():
+                w.destroy()
+            wrap = tk.Frame(self, bg="#0d0010", padx=48, pady=40)
+            wrap.pack()
+            tk.Label(wrap, text="✓", font=tkfont.Font(family="Segoe UI", size=32),
+                     bg="#0d0010", fg="#86efac").pack()
+            tk.Label(wrap, text="Account created!", font=tkfont.Font(family="Segoe UI", size=13, weight="bold"),
+                     bg="#0d0010", fg="#e9d5ff").pack(pady=(8, 4))
+            tk.Label(wrap, text=f"Welcome, {user}.\nYou can now log in.", font=tkfont.Font(family="Segoe UI", size=9),
+                     bg="#0d0010", fg="#6b21a8").pack()
+            close = tk.Label(wrap, text="Go to Login", font=tkfont.Font(family="Segoe UI", size=9, weight="bold"),
+                              bg="#4c1d95", fg="#e9d5ff", padx=20, pady=8, cursor="hand2")
+            close.pack(pady=(20, 0))
+            close.bind("<Button-1>", lambda e: self.destroy())
+        else:
+            self._status_var.set(f"error: {err_msg[:60]}" if err_msg else "could not connect — try again")
+
+
 if __name__ == "__main__":
     while True:
         session = load_session()
-        auto_login = (session and USERS.get(session.get("user")) == session.get("pw"))
+        auto_login = (session and validate_user_remote(session.get("user",""), session.get("pw","")))
         if auto_login:
-            app = AHKManager()
+            app = AHKManager(current_user=session["user"])
             app._logged_out = False
             app.mainloop()
             if getattr(app, "_logged_out", False):
@@ -2045,7 +2357,7 @@ if __name__ == "__main__":
             login = LoginScreen()
             login.mainloop()
             if login._success:
-                app = AHKManager()
+                app = AHKManager(current_user=getattr(login, "_logged_user", ""))
                 app._logged_out = False
                 app.mainloop()
                 if getattr(app, "_logged_out", False):
