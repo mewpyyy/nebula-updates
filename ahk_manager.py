@@ -27,7 +27,7 @@ GITHUB_REPO   = "mewpyyy/nebula-updates"
 GITHUB_BRANCH = "main"
 USERS_FILE    = "users.json"
 # ▼▼ Paste your GitHub Personal Access Token here ▼▼
-GITHUB_TOKEN  = "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"
+GITHUB_TOKEN  = "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"
 # ▲▲ ──────────────────────────────────────────── ▲▲
 # How to get a token:
 #   GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)
