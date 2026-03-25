@@ -30,7 +30,7 @@ USERS_FILE    = "users.json"
 # Token is XOR-obfuscated so GitHub's scanner doesn't auto-revoke it.
 # To update: run _obfuscate_token("your_new_token") and paste the result below.
 _TOKEN_KEY = 0x5A
-_TOKEN_OBF = [61, 50, 42, 5, 21, 31, 62, 13, 25, 27, 54, 12, 20, 43, 29, 107, 35, 2, 49, 22, 109, 41, 107, 51, 41, 2, 52, 105, 30, 23, 60, 3, 2, 35, 106, 106, 62, 53, 59, 45]
+_TOKEN_OBF = []
 
 def _get_token():
     return "".join(chr(b ^ _TOKEN_KEY) for b in _TOKEN_OBF)
