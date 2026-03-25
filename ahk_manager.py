@@ -1938,51 +1938,65 @@ class AHKManager(tk.Tk):
         win.geometry(f"+{px}+{py}")
 
     def _download_and_restart(self):
-        """Download latest script, replace self, and restart.
-        Works whether running as a compiled .exe or a plain .py file.
-        """
+        """Download latest script and use a helper batch to swap it after app exits."""
         try:
-            is_frozen = getattr(sys, "frozen", False)  # True when running as .exe
+            is_frozen = getattr(sys, "frozen", False)
 
             if is_frozen:
-                # Running as .exe — download the new .py next to the .exe
-                exe_path  = os.path.abspath(sys.executable)
-                exe_dir   = os.path.dirname(exe_path)
-                py_path   = os.path.join(exe_dir, "ahk_manager.py")
+                exe_path = os.path.abspath(sys.executable)
+                exe_dir  = os.path.dirname(exe_path)
+                py_path  = os.path.join(exe_dir, "ahk_manager.py")
             else:
-                # Running as plain .py
-                py_path   = os.path.abspath(sys.argv[0])
-                exe_path  = None
+                py_path  = os.path.abspath(sys.argv[0])
+                exe_path = sys.executable
+                exe_dir  = os.path.dirname(py_path)
 
             backup_path = py_path + ".bak"
-            tmp_path    = py_path + ".update_tmp"
 
-            # Download new script
+            # Download to system temp folder — completely outside the app directory
+            tmp_path = os.path.join(tempfile.gettempdir(), "nebula_update.py")
             urllib.request.urlretrieve(UPDATE_SCRIPT_URL, tmp_path)
 
             # Sanity check
             with open(tmp_path, "r", encoding="utf-8") as f:
                 content = f.read()
             if "AHKManager" not in content:
+                os.remove(tmp_path)
                 raise ValueError("Downloaded file doesn't look like Nebula — aborting.")
 
-            # Backup old, put new in place
-            if os.path.exists(py_path):
-                shutil.copy2(py_path, backup_path)
-            shutil.move(tmp_path, py_path)
+            # Write updater batch to system temp too
+            bat_path = os.path.join(tempfile.gettempdir(), "_nebula_update.bat")
+            pid      = os.getpid()
+            relaunch = f'"{exe_path}"' if is_frozen else f'"{sys.executable}" "{py_path}"'
 
-            # Stop all running scripts
+            bat = f"""@echo off
+:wait
+tasklist /FI "PID eq {pid}" 2>NUL | find "{pid}" >NUL
+if not errorlevel 1 (
+    timeout /t 1 /nobreak >NUL
+    goto wait
+)
+if exist "{backup_path}" del /f /q "{backup_path}"
+if exist "{py_path}" move /y "{py_path}" "{backup_path}"
+move /y "{tmp_path}" "{py_path}"
+start "" {relaunch}
+del /f /q "%~f0"
+"""
+            with open(bat_path, "w") as f:
+                f.write(bat)
+
+            # Stop all running AHK scripts
             for proc in self.procs.values():
                 try: proc.terminate()
                 except Exception: pass
             shutil.rmtree(self.tmp_dir, ignore_errors=True)
 
-            if is_frozen:
-                # Restart the .exe — it will pick up the new .py on next launch
-                subprocess.Popen([exe_path])
-            else:
-                subprocess.Popen([sys.executable, py_path])
-
+            # Launch the batch script fully detached then exit
+            subprocess.Popen(
+                ["cmd.exe", "/c", bat_path],
+                creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS,
+                close_fds=True
+            )
             self.destroy()
 
         except Exception as ex:
