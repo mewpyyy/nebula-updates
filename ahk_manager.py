@@ -1953,19 +1953,37 @@ class AHKManager(tk.Tk):
 
             backup_path = py_path + ".bak"
 
-            # Download to system temp folder — completely outside the app directory
-            tmp_path = os.path.join(tempfile.gettempdir(), "nebula_update.py")
-            urllib.request.urlretrieve(UPDATE_SCRIPT_URL, tmp_path)
+            # Clean up any leftover temp files from previous failed attempts
+            tmp_dir = tempfile.gettempdir()
+            for f in os.listdir(tmp_dir):
+                if f.startswith("nebula_update_") or f.startswith("_nebula_update_"):
+                    try: os.remove(os.path.join(tmp_dir, f))
+                    except Exception: pass
+
+            # Download to system temp folder with a unique name each time
+            import uuid
+            tmp_path = os.path.join(tempfile.gettempdir(), f"nebula_update_{uuid.uuid4().hex}.py")
+
+            # Use urlopen instead of urlretrieve for better control
+            req = urllib.request.Request(
+                UPDATE_SCRIPT_URL,
+                headers={"Cache-Control": "no-cache", "User-Agent": "Nebula-Updater"}
+            )
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                content_bytes = resp.read()
+
+            # Write to temp file
+            with open(tmp_path, "wb") as f:
+                f.write(content_bytes)
 
             # Sanity check
-            with open(tmp_path, "r", encoding="utf-8") as f:
-                content = f.read()
+            content = content_bytes.decode("utf-8")
             if "AHKManager" not in content:
                 os.remove(tmp_path)
                 raise ValueError("Downloaded file doesn't look like Nebula — aborting.")
 
             # Write updater batch to system temp too
-            bat_path = os.path.join(tempfile.gettempdir(), "_nebula_update.bat")
+            bat_path = os.path.join(tempfile.gettempdir(), f"_nebula_update_{uuid.uuid4().hex}.bat")
             pid      = os.getpid()
             relaunch = f'"{exe_path}"' if is_frozen else f'"{sys.executable}" "{py_path}"'
 
