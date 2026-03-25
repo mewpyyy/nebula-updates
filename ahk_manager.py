@@ -11,7 +11,7 @@ import urllib.request
 import urllib.error
 
 # ── Version & auto-update ─────────────────────────────────────────────────────
-CURRENT_VERSION = "1.1.3"
+CURRENT_VERSION = "1.1.4"
 # ▼▼ Replace these URLs with your actual web server paths ▼▼
 UPDATE_VERSION_URL = "https://mewpyyy.github.io/nebula-updates/version.json"
 UPDATE_SCRIPT_URL  = "https://mewpyyy.github.io/nebula-updates/ahk_manager.py"
@@ -2039,7 +2039,7 @@ class AHKManager(tk.Tk):
             # Write batch just to swap the file after app closes
             bat_path = os.path.join(tempfile.gettempdir(), f"_nebula_update_{uuid.uuid4().hex}.bat")
             bat = f"""@echo off
-ping 127.0.0.1 -n 4 >NUL
+for /l %%i in (1,1,4) do (ping 127.0.0.1 -n 2 -w 1000 >NUL 2>&1)
 if exist "{backup_path}" del /f /q "{backup_path}"
 if exist "{py_path}" move /y "{py_path}" "{backup_path}"
 move /y "{tmp_path}" "{py_path}"
