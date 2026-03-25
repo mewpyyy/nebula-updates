@@ -11,7 +11,7 @@ import urllib.request
 import urllib.error
 
 # ── Version & auto-update ─────────────────────────────────────────────────────
-CURRENT_VERSION = "1.2.0"
+CURRENT_VERSION = "1.2.3"
 # ▼▼ Replace these URLs with your actual web server paths ▼▼
 UPDATE_VERSION_URL = "https://mewpyyy.github.io/nebula-updates/version.json"
 UPDATE_SCRIPT_URL  = "https://mewpyyy.github.io/nebula-updates/ahk_manager.py"
@@ -1953,7 +1953,7 @@ class AHKManager(tk.Tk):
             if latest and latest != CURRENT_VERSION:
                 self.after(0, lambda: self._prompt_update(latest))
         except Exception:
-            pass  # No internet or server not set up yet — silently skip
+            pass
 
     def _prompt_update(self, latest_version):
         t = self._theme
@@ -2431,10 +2431,11 @@ class CreateAccountScreen(tk.Toplevel):
 
 if __name__ == "__main__":
     # ── onedir mode: if an ahk_manager.py exists next to the exe, run it ──
-    if getattr(sys, "frozen", False):
+    if getattr(sys, "frozen", False) and not os.environ.get("NEBULA_UPDATED"):
         exe_dir    = os.path.dirname(os.path.abspath(sys.executable))
         updated_py = os.path.join(exe_dir, "ahk_manager.py")
         if os.path.exists(updated_py):
+            os.environ["NEBULA_UPDATED"] = "1"
             with open(updated_py, "r", encoding="utf-8") as f:
                 code = f.read()
             exec(compile(code, updated_py, "exec"), {"__name__": "__main__", "__file__": updated_py})
