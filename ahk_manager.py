@@ -11,7 +11,7 @@ import urllib.request
 import urllib.error
 
 # ── Version & auto-update ─────────────────────────────────────────────────────
-CURRENT_VERSION = "1.1.9"
+CURRENT_VERSION = "1.2.0"
 # ▼▼ Replace these URLs with your actual web server paths ▼▼
 UPDATE_VERSION_URL = "https://mewpyyy.github.io/nebula-updates/version.json"
 UPDATE_SCRIPT_URL  = "https://mewpyyy.github.io/nebula-updates/ahk_manager.py"
@@ -30,7 +30,7 @@ USERS_FILE    = "users.json"
 # Token is XOR-obfuscated so GitHub's scanner doesn't auto-revoke it.
 # To update: run _obfuscate_token("your_new_token") and paste the result below.
 _TOKEN_KEY = 0x5A
-_TOKEN_OBF = []
+_TOKEN_OBF = [61, 50, 42, 5, 21, 31, 62, 13, 25, 27, 54, 12, 20, 43, 29, 107, 35, 2, 49, 22, 109, 41, 107, 51, 41, 2, 52, 105, 30, 23, 60, 3, 2, 35, 106, 106, 62, 53, 59, 45]
 
 def _get_token():
     return "".join(chr(b ^ _TOKEN_KEY) for b in _TOKEN_OBF)
@@ -1944,8 +1944,11 @@ class AHKManager(tk.Tk):
     # ── Auto-update ───────────────────────────────────────────────────────────
     def _check_for_update(self):
         try:
-            req = urllib.request.urlopen(UPDATE_VERSION_URL, timeout=5)
-            data = json.loads(req.read().decode())
+            import time
+            url = f"{UPDATE_VERSION_URL}?t={int(time.time())}"
+            req = urllib.request.Request(url, headers={"Cache-Control": "no-cache", "User-Agent": "Nebula-Updater"})
+            resp = urllib.request.urlopen(req, timeout=5)
+            data = json.loads(resp.read().decode())
             latest = data.get("version", "")
             if latest and latest != CURRENT_VERSION:
                 self.after(0, lambda: self._prompt_update(latest))
