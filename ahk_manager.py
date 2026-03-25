@@ -11,7 +11,7 @@ import urllib.request
 import urllib.error
 
 # ── Version & auto-update ─────────────────────────────────────────────────────
-CURRENT_VERSION = "1.1.7"
+CURRENT_VERSION = "1.1.8"
 # ▼▼ Replace these URLs with your actual web server paths ▼▼
 UPDATE_VERSION_URL = "https://mewpyyy.github.io/nebula-updates/version.json"
 UPDATE_SCRIPT_URL  = "https://mewpyyy.github.io/nebula-updates/ahk_manager.py"
@@ -2432,10 +2432,9 @@ if __name__ == "__main__":
         exe_dir    = os.path.dirname(os.path.abspath(sys.executable))
         updated_py = os.path.join(exe_dir, "ahk_manager.py")
         if os.path.exists(updated_py):
-            import importlib.util
-            spec = importlib.util.spec_from_file_location("ahk_manager", updated_py)
-            mod  = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(mod)
+            with open(updated_py, "r", encoding="utf-8") as f:
+                code = f.read()
+            exec(compile(code, updated_py, "exec"), {"__name__": "__main__", "__file__": updated_py})
             sys.exit(0)
 
     while True:
