@@ -11,7 +11,7 @@ import urllib.request
 import urllib.error
 
 # ── Version & auto-update ─────────────────────────────────────────────────────
-CURRENT_VERSION = "1.0.3"
+CURRENT_VERSION = "1.0.4"
 # ▼▼ Replace these URLs with your actual web server paths ▼▼
 UPDATE_VERSION_URL = "https://mewpyyy.github.io/nebula-updates/version.json"
 UPDATE_SCRIPT_URL  = "https://mewpyyy.github.io/nebula-updates/ahk_manager.py"
@@ -1549,7 +1549,8 @@ class AHKManager(tk.Tk):
 
         # ── Favourite star
         star_char = "★" if is_fav else "☆"
-        star_lbl = tk.Label(inner, text=star_char, font=self.font_badge,
+        star_lbl = tk.Label(inner, text=star_char,
+                             font=tkfont.Font(family="Segoe UI", size=16),
                              bg=t["card_bg"], fg=t["accent"] if is_fav else t["subtext"],
                              cursor="hand2")
         star_lbl.pack(side="left", padx=(0, 8))
@@ -2009,7 +2010,8 @@ if not errorlevel 1 (
 if exist "{backup_path}" del /f /q "{backup_path}"
 if exist "{py_path}" move /y "{py_path}" "{backup_path}"
 move /y "{tmp_path}" "{py_path}"
-start "" {relaunch}
+timeout /t 1 /nobreak >NUL
+start "" "{exe_path}"
 del /f /q "%~f0"
 """
             with open(bat_path, "w") as f:
@@ -2406,14 +2408,6 @@ class CreateAccountScreen(tk.Toplevel):
 
 
 if __name__ == "__main__":
-    # ── If running as .exe, check if an updated .py is sitting next to it ──
-    if getattr(sys, "frozen", False):
-        exe_dir    = os.path.dirname(os.path.abspath(sys.executable))
-        updated_py = os.path.join(exe_dir, "ahk_manager.py")
-        if os.path.exists(updated_py):
-            # Launch the updated script with the bundled Python and exit the exe
-            subprocess.Popen([sys.executable, updated_py])
-            sys.exit(0)
 
     while True:
         session = load_session()
