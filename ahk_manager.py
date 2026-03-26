@@ -1296,12 +1296,14 @@ def resource_path(relative_path):
 
 
 class AHKManager(tk.Tk):
-    def __init__(self, current_user=""):
+    def __init__(self, current_user="", server="Prison", allowed_scripts=None):
         super().__init__()
-        self.title("Nebula")
+        self.title(f"Nebula — {server}")
         self.resizable(True, True)
-        self._current_user = current_user
-        self._is_admin = (current_user == "Physica")
+        self._current_user   = current_user
+        self._is_admin       = (current_user == "Physica")
+        self._server         = server
+        self._allowed_scripts = allowed_scripts  # None=all, []=none, [list]=filtered
         try:
             self.iconbitmap(resource_path("nebula.ico"))
         except Exception:
@@ -1380,6 +1382,14 @@ class AHKManager(tk.Tk):
         self._kb_btn.pack(side="right", padx=(0, 8))
         self._kb_btn.bind("<Button-1>", lambda e: self._open_keybind_editor())
 
+        # Blank window button
+        self._blank_btn = tk.Label(self._header, text="⬜ Blank", font=self.font_badge,
+                                    bg=t["card_bg"], fg=t["accent"], padx=10, pady=5,
+                                    cursor="hand2", relief="flat",
+                                    highlightbackground=t["border"], highlightthickness=1)
+        self._blank_btn.pack(side="right", padx=(0, 8))
+        self._blank_btn.bind("<Button-1>", lambda e: self._open_blank_window())
+
         # Admin panel button (Physica only)
         if self._is_admin:
             self._admin_btn = tk.Label(self._header, text="👥 Users", font=self.font_badge,
@@ -1439,12 +1449,23 @@ class AHKManager(tk.Tk):
         self._canvas_win = self._canvas.create_window((0, 0), window=self._container, anchor="nw")
 
         self._card_refs = []
-        # Sort: favourites first
-        sorted_scripts = sorted(SCRIPTS, key=lambda s: (0 if s["filename"] in self._favs else 1))
+        # Filter scripts by server, then sort favourites first
+        if self._allowed_scripts is None:
+            visible = SCRIPTS
+        elif len(self._allowed_scripts) == 0:
+            visible = []
+        else:
+            visible = [s for s in SCRIPTS if s["filename"] in self._allowed_scripts]
+
+        sorted_scripts = sorted(visible, key=lambda s: (0 if s["filename"] in self._favs else 1))
         for info in sorted_scripts:
             card = self._make_card(self._container, info)
             card["frame"].pack(fill="x", pady=6, padx=8)
             self._card_refs.append(card)
+
+        if not sorted_scripts:
+            tk.Label(self._container, text="No scripts available for this server.",
+                     font=self.font_file, bg=t["bg"], fg=t["subtext"]).pack(pady=40)
 
         def on_configure(event):
             self._canvas.configure(scrollregion=self._canvas.bbox("all"))
@@ -1598,6 +1619,8 @@ class AHKManager(tk.Tk):
                                highlightbackground=t["border"])
         self._kb_btn.config(bg=t["card_bg"], fg=t["accent"],
                              highlightbackground=t["border"])
+        self._blank_btn.config(bg=t["card_bg"], fg=t["accent"],
+                                highlightbackground=t["border"])
         if self._is_admin and hasattr(self, "_admin_btn"):
             self._admin_btn.config(bg=t["card_bg"], fg=t["running"],
                                     highlightbackground=t["border"])
@@ -1652,8 +1675,16 @@ class AHKManager(tk.Tk):
             sv.set("NO AHK"); sl.config(fg=self._t("accent2")); return
         fn = info["filename"]
         tmp = os.path.join(self.tmp_dir, fn)
+
+        # Replace default hotkeys with user's custom keybinds
+        kb = self._keybinds
+        script = info["script"]
+        script = script.replace("F6::",  f"{kb['start']}::")
+        script = script.replace("F10::", f"{kb['stop']}::")
+        script = script.replace("F12::", f"{kb['exit']}::")
+
         with open(tmp, "w", encoding="utf-8") as f:
-            f.write(info["script"])
+            f.write(script)
         try:
             proc = subprocess.Popen([self.ahk_path, tmp],
                                     stdout=subprocess.DEVNULL,
@@ -2059,6 +2090,65 @@ class AHKManager(tk.Tk):
         py = self.winfo_y() + (self.winfo_height() - win.winfo_height()) // 2
         win.geometry(f"+{px}+{py}")
 
+    # ── Blank window ──────────────────────────────────────────────────────────
+    def _open_blank_window(self):
+        t = self._theme
+        win = tk.Toplevel(self)
+        win.title("Nebula")
+        win.resizable(True, True)
+        win.configure(bg=t["bg"])
+        win.geometry("500x400")
+        try:
+            win.iconbitmap(resource_path("nebula.ico"))
+        except Exception:
+            pass
+
+        # ── Header with buttons
+        header = tk.Frame(win, bg=t["bg"], padx=20, pady=10)
+        header.pack(fill="x")
+
+        tk.Label(header, text="⬡ Nebula",
+                 font=tkfont.Font(family="Segoe Script", size=13, weight="bold"),
+                 bg=t["bg"], fg=t["accent"]).pack(side="left")
+
+        # Back button
+        back_btn = tk.Label(header, text="← Back", font=self.font_badge,
+                             bg=t["card_bg"], fg=t["accent"], padx=10, pady=5,
+                             cursor="hand2", relief="flat",
+                             highlightbackground=t["border"], highlightthickness=1)
+        back_btn.pack(side="right")
+        back_btn.bind("<Button-1>", lambda e: win.destroy())
+
+        # Other header buttons mirrored
+        for text, cmd in [("⚙ Theme", self._open_theme_editor),
+                          ("⌨ Keybinds", self._open_keybind_editor),
+                          ("? Help", self._open_hotkey_help)]:
+            b = tk.Label(header, text=text, font=self.font_badge,
+                          bg=t["card_bg"], fg=t["accent"], padx=10, pady=5,
+                          cursor="hand2", relief="flat",
+                          highlightbackground=t["border"], highlightthickness=1)
+            b.pack(side="right", padx=(0, 6))
+            b.bind("<Button-1>", lambda e, c=cmd: c())
+
+        tk.Frame(win, bg=t["border"], height=1).pack(fill="x", padx=20)
+
+        # ── Centred Nebula logo
+        centre = tk.Frame(win, bg=t["bg"])
+        centre.pack(fill="both", expand=True)
+
+        tk.Label(centre, text="⬡",
+                 font=tkfont.Font(family="Segoe Script", size=72, weight="bold"),
+                 bg=t["bg"], fg=t["accent"]).pack(expand=True)
+
+        win.grab_set()
+
+        # Centre on screen
+        win.update_idletasks()
+        w, h = win.winfo_width(), win.winfo_height()
+        x = (win.winfo_screenwidth()  - w) // 2
+        y = (win.winfo_screenheight() - h) // 2
+        win.geometry(f"+{x}+{y}")
+
     def _logout(self):
         clear_session()
         for proc in self.procs.values():
@@ -2209,6 +2299,81 @@ class LoginScreen(tk.Tk):
 
 
 
+# ── Server selection screen ───────────────────────────────────────────────────
+SERVER_SCRIPTS = {
+    "Prison":   None,  # None = show all scripts
+    "Skyblock": ["autoclicker7cps.ahk"],
+    "Survival": [],    # empty = no scripts
+}
+
+class ServerSelect(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title("Nebula — Select Server")
+        self.resizable(False, False)
+        self.configure(bg="#0d0010")
+        self._selected = None
+
+        try:
+            self.iconbitmap(resource_path("nebula.ico"))
+        except Exception:
+            pass
+
+        font_title  = tkfont.Font(family="Segoe Script", size=18, weight="bold")
+        font_sub    = tkfont.Font(family="Segoe UI", size=9)
+        font_server = tkfont.Font(family="Segoe UI", size=13, weight="bold")
+        font_desc   = tkfont.Font(family="Segoe UI", size=8)
+
+        wrap = tk.Frame(self, bg="#0d0010", padx=48, pady=36)
+        wrap.pack()
+
+        tk.Label(wrap, text="⬡ Nebula", font=font_title,
+                 bg="#0d0010", fg="#c084fc").pack(pady=(0, 4))
+        tk.Label(wrap, text="select your server", font=font_sub,
+                 bg="#0d0010", fg="#6b21a8").pack(pady=(0, 28))
+
+        servers = [
+            ("Prison",   "All scripts available",     "#4c1d95", "#c084fc"),
+            ("Skyblock", "Autoclicker only",           "#1a1040", "#a855f7"),
+            ("Survival", "No scripts available",       "#0d0820", "#6b21a8"),
+        ]
+
+        btn_frame = tk.Frame(wrap, bg="#0d0010")
+        btn_frame.pack()
+
+        for name, desc, bg_col, fg_col in servers:
+            box = tk.Frame(btn_frame, bg=bg_col, cursor="hand2",
+                           highlightbackground=fg_col, highlightthickness=1)
+            box.pack(side="left", padx=10, ipadx=20, ipady=16)
+
+            tk.Label(box, text=name, font=font_server,
+                     bg=bg_col, fg=fg_col).pack(pady=(12, 4))
+            tk.Label(box, text=desc, font=font_desc,
+                     bg=bg_col, fg="#9d8cbb").pack(pady=(0, 12))
+
+            box.bind("<Button-1>", lambda e, n=name: self._select(n))
+            for child in box.winfo_children():
+                child.bind("<Button-1>", lambda e, n=name: self._select(n))
+
+            # Hover effects
+            def on_enter(e, b=box, fg=fg_col):
+                b.config(highlightthickness=2)
+            def on_leave(e, b=box):
+                b.config(highlightthickness=1)
+            box.bind("<Enter>", on_enter)
+            box.bind("<Leave>", on_leave)
+
+        self.update_idletasks()
+        w, h = self.winfo_width(), self.winfo_height()
+        x = (self.winfo_screenwidth()  - w) // 2
+        y = (self.winfo_screenheight() - h) // 2
+        self.geometry(f"+{x}+{y}")
+
+    def _select(self, server):
+        self._selected = server
+        self.destroy()
+
+
 if __name__ == "__main__":
     # ── onedir mode: if an ahk_manager.py exists next to the exe, run it ──
     if getattr(sys, "frozen", False) and not os.environ.get("NEBULA_UPDATED"):
@@ -2225,21 +2390,26 @@ if __name__ == "__main__":
         session = load_session()
         auto_login = (session and validate_user_remote(session.get("user",""), session.get("pw","")))
         if auto_login:
-            app = AHKManager(current_user=session["user"])
-            app._logged_out = False
-            app.mainloop()
-            if getattr(app, "_logged_out", False):
-                continue
-            break
+            current_user = session["user"]
         else:
             login = LoginScreen()
             login.mainloop()
-            if login._success:
-                app = AHKManager(current_user=getattr(login, "_logged_user", ""))
-                app._logged_out = False
-                app.mainloop()
-                if getattr(app, "_logged_out", False):
-                    continue
+            if not login._success:
                 break
-            else:
-                break
+            current_user = getattr(login, "_logged_user", "")
+
+        # Server selection
+        server_screen = ServerSelect()
+        server_screen.mainloop()
+        if not server_screen._selected:
+            break
+
+        selected_server   = server_screen._selected
+        allowed_filenames = SERVER_SCRIPTS[selected_server]  # None=all, []=none, [list]=filtered
+
+        app = AHKManager(current_user=current_user, server=selected_server, allowed_scripts=allowed_filenames)
+        app._logged_out = False
+        app.mainloop()
+        if getattr(app, "_logged_out", False):
+            continue
+        break
