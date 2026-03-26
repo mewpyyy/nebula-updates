@@ -11,7 +11,7 @@ import urllib.request
 import urllib.error
 
 # ── Version & auto-update ─────────────────────────────────────────────────────
-CURRENT_VERSION = "1.3.6"
+CURRENT_VERSION = "1.3.7"
 # ▼▼ Replace these URLs with your actual web server paths ▼▼
 UPDATE_VERSION_URL = "https://mewpyyy.github.io/nebula-updates/version.json"
 UPDATE_SCRIPT_URL  = "https://mewpyyy.github.io/nebula-updates/ahk_manager.py"
@@ -19,68 +19,29 @@ UPDATE_SCRIPT_URL  = "https://mewpyyy.github.io/nebula-updates/ahk_manager.py"
 
 # ── Users (add/remove entries here to manage access) ─────────────────────────
 USERS = {
-    "Physica": "PhysiaAdmin1",   # ← admin account, never remove this
+    "Physica":        "PhysiaAdmin1",   # ← admin account, never remove this
+    "KukuTheGriefer": "Kuku6767",
+    "Arukii":         "Outmined",
+    "Jcash":          "Goober67",
+    "Myrak":          "MK900!",
+    "Physica5":       "Physica5",
+    "Physica6":       "Physica6",
+    "Physica7":       "Physica7",
+    "Physica8":       "Physica8",
 }
 
-# ── JSONBin user storage ──────────────────────────────────────────────────────
-_JSONBIN_BIN_ID  = "69c484a1aa77b81da91d6b3f"
-_JSONBIN_KEY_KEY = 0x5A
-_JSONBIN_KEY_OBF = []
-
-def _get_jsonbin_key():
-    return "".join(chr(b ^ _JSONBIN_KEY_KEY) for b in _JSONBIN_KEY_OBF)
-
-def _jsonbin_headers():
-    key = _get_jsonbin_key()
-    return {
-        "Content-Type": "application/json",
-        "X-Master-Key": key,
-        "X-Bin-Versioning": "false",
-    }
-
-JSONBIN_URL = f"https://api.jsonbin.io/v3/b/{_JSONBIN_BIN_ID}"
-
+# ── User validation ───────────────────────────────────────────────────────────
 def fetch_remote_users():
-    """Fetch users from JSONBin. Returns (dict_of_users, error_str)."""
-    try:
-        req = urllib.request.Request(
-            JSONBIN_URL + "/latest",
-            headers=_jsonbin_headers()
-        )
-        resp = urllib.request.urlopen(req, timeout=6)
-        data = json.loads(resp.read().decode())
-        users = data.get("record", {}).get("users", {})
-        return users, None
-    except urllib.error.HTTPError as e:
-        body = e.read().decode()
-        return {}, f"HTTP {e.code}: {body[:80]}"
-    except Exception as ex:
-        return {}, str(ex)
+    """Return local USERS dict — accounts are hardcoded."""
+    return dict(USERS), None
 
 def push_remote_users(users, sha=None):
-    """Push updated users dict to JSONBin."""
-    payload = json.dumps({"users": users}).encode()
-    req = urllib.request.Request(
-        JSONBIN_URL,
-        data=payload,
-        headers=_jsonbin_headers(),
-        method="PUT"
-    )
-    try:
-        urllib.request.urlopen(req, timeout=10)
-        return True, ""
-    except urllib.error.HTTPError as e:
-        body = e.read().decode()
-        return False, f"HTTP {e.code}: {body}"
-    except Exception as ex:
-        return False, str(ex)
+    """No-op — accounts are hardcoded, not stored remotely."""
+    return True, ""
 
 def validate_user_remote(username, password):
-    """Check credentials against JSONBin users. Falls back to local USERS."""
-    if USERS.get(username) == password:
-        return True
-    remote, _ = fetch_remote_users()
-    return remote.get(username) == password
+    """Validate against hardcoded USERS dict."""
+    return USERS.get(username) == password
 
 # ── Stats / Favourites files ──────────────────────────────────────────────────
 STATS_FILE = os.path.join(os.path.expanduser("~"), ".ahkmanager_stats.json")
@@ -2062,12 +2023,12 @@ class AHKManager(tk.Tk):
         def refresh():
             for w in list_frame.winfo_children():
                 w.destroy()
-            remote_users, fetch_err = fetch_remote_users()
-            if fetch_err or not isinstance(remote_users, dict):
-                tk.Label(list_frame, text=f"Could not load users:\n{fetch_err}",
+            remote_users, _ = fetch_remote_users()
+            if not remote_users:
+                tk.Label(list_frame, text="No users found.",
                          font=self.font_file, bg=t["bg"], fg=t["accent2"]).pack()
                 return
-            tk.Label(list_frame, text=f"{'USERNAME':<22} {'CREATED':<12}  ACTION",
+            tk.Label(list_frame, text=f"{'USERNAME':<30}",
                      font=self.font_file, bg=t["bg"], fg=t["subtext"],
                      anchor="w").pack(fill="x", pady=(0, 4))
             tk.Frame(list_frame, bg=t["border"], height=1).pack(fill="x", pady=(0, 6))
@@ -2076,25 +2037,7 @@ class AHKManager(tk.Tk):
                                 highlightbackground=t["border"], highlightthickness=1)
                 row.pack(fill="x", pady=3, ipady=6)
                 tk.Label(row, text=uname, font=self.font_file, bg=t["card_bg"],
-                          fg=t["text"], width=22, anchor="w", padx=8).pack(side="left")
-                def delete(u=uname):
-                    remote, _ = fetch_remote_users()
-                    if u in remote:
-                        del remote[u]
-                        ok, _ = push_remote_users(remote)
-                        if ok:
-                            status_var.set(f"✓ Deleted '{u}'")
-                            status_lbl.config(fg=t["running"])
-                        else:
-                            status_var.set(f"✗ Failed to delete '{u}'")
-                            status_lbl.config(fg=t["accent2"])
-                        refresh()
-                del_btn = tk.Label(row, text="Delete", font=self.font_badge,
-                                    bg=t["accent2"], fg="#ffffff", padx=8, pady=2,
-                                    cursor="hand2")
-                del_btn.pack(side="right", padx=8)
-                del_btn.bind("<Button-1>", lambda e, u=uname: delete(u))
-
+                          fg=t["text"], anchor="w", padx=8).pack(side="left")
             tk.Label(list_frame, text=f"{len(remote_users)} account(s) on file",
                      font=self.font_file, bg=t["bg"], fg=t["subtext"]).pack(pady=(8, 0))
 
@@ -2225,16 +2168,6 @@ class LoginScreen(tk.Tk):
         self._pass_entry.bind("<Return>", lambda e: self._attempt())
         self._user_entry.bind("<Return>", lambda e: self._pass_entry.focus())
 
-        # Create account link
-        reg_frame = tk.Frame(wrap, bg="#0d0010")
-        reg_frame.pack(pady=(14, 0))
-        tk.Label(reg_frame, text="Don't have an account?", font=font_sub,
-                 bg="#0d0010", fg="#6b21a8").pack(side="left")
-        reg_lnk = tk.Label(reg_frame, text=" Sign up", font=tkfont.Font(family="Segoe UI", size=9, underline=True),
-                            bg="#0d0010", fg="#a855f7", cursor="hand2")
-        reg_lnk.pack(side="left")
-        reg_lnk.bind("<Button-1>", lambda e: self._open_register())
-
         # Centre window
         self.update_idletasks()
         w, h = self.winfo_width(), self.winfo_height()
@@ -2274,144 +2207,6 @@ class LoginScreen(tk.Tk):
             self._pass_entry.focus()
 
 
-    def _open_register(self):
-        CreateAccountScreen(self)
-
-
-class CreateAccountScreen(tk.Toplevel):
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.title("Nebula — Create Account")
-        self.resizable(False, False)
-        self.configure(bg="#0d0010")
-        self.grab_set()
-
-        font_title = tkfont.Font(family="Segoe Script", size=16, weight="bold")
-        font_sub   = tkfont.Font(family="Segoe UI", size=9)
-        font_label = tkfont.Font(family="Segoe UI", size=8, weight="bold")
-        font_entry = tkfont.Font(family="Segoe UI", size=11)
-        font_err   = tkfont.Font(family="Segoe UI", size=8)
-        font_btn   = tkfont.Font(family="Segoe UI", size=10, weight="bold")
-
-        wrap = tk.Frame(self, bg="#0d0010", padx=48, pady=36)
-        wrap.pack()
-
-        tk.Label(wrap, text="⬡ Nebula", font=font_title,
-                 bg="#0d0010", fg="#c084fc").pack(pady=(0, 2))
-        tk.Label(wrap, text="create a new account", font=font_sub,
-                 bg="#0d0010", fg="#6b21a8").pack(pady=(0, 20))
-
-        # Username
-        tk.Label(wrap, text="USERNAME", font=font_label,
-                 bg="#0d0010", fg="#a855f7", anchor="w").pack(fill="x")
-        self._user_var = tk.StringVar()
-        self._user_entry = tk.Entry(wrap, textvariable=self._user_var,
-                                     font=font_entry, bg="#1a0030", fg="#e9d5ff",
-                                     insertbackground="#c084fc", relief="flat", bd=0,
-                                     highlightthickness=1, highlightbackground="#4c1d95",
-                                     highlightcolor="#a855f7")
-        self._user_entry.pack(fill="x", ipady=8, pady=(4, 14))
-
-        # Password
-        tk.Label(wrap, text="PASSWORD", font=font_label,
-                 bg="#0d0010", fg="#a855f7", anchor="w").pack(fill="x")
-        self._pass_var = tk.StringVar()
-        self._pass_entry = tk.Entry(wrap, textvariable=self._pass_var,
-                                     font=font_entry, bg="#1a0030", fg="#e9d5ff",
-                                     insertbackground="#c084fc", relief="flat", bd=0,
-                                     show="•", highlightthickness=1,
-                                     highlightbackground="#4c1d95", highlightcolor="#a855f7")
-        self._pass_entry.pack(fill="x", ipady=8, pady=(4, 14))
-
-        # Confirm Password
-        tk.Label(wrap, text="CONFIRM PASSWORD", font=font_label,
-                 bg="#0d0010", fg="#a855f7", anchor="w").pack(fill="x")
-        self._conf_var = tk.StringVar()
-        self._conf_entry = tk.Entry(wrap, textvariable=self._conf_var,
-                                     font=font_entry, bg="#1a0030", fg="#e9d5ff",
-                                     insertbackground="#c084fc", relief="flat", bd=0,
-                                     show="•", highlightthickness=1,
-                                     highlightbackground="#4c1d95", highlightcolor="#a855f7")
-        self._conf_entry.pack(fill="x", ipady=8, pady=(4, 16))
-
-        # Status label
-        self._status_var = tk.StringVar()
-        tk.Label(wrap, textvariable=self._status_var, font=font_err,
-                 bg="#0d0010", fg="#f87171").pack(pady=(0, 10))
-
-        # Create button
-        btn = tk.Label(wrap, text="CREATE ACCOUNT", font=font_btn,
-                       bg="#4c1d95", fg="#e9d5ff", padx=24, pady=10,
-                       cursor="hand2", relief="flat")
-        btn.pack()
-        btn.bind("<Button-1>", lambda e: self._create())
-        self._conf_entry.bind("<Return>", lambda e: self._create())
-
-        self.update_idletasks()
-        px = parent.winfo_x() + (parent.winfo_width()  - self.winfo_width())  // 2
-        py = parent.winfo_y() + (parent.winfo_height() - self.winfo_height()) // 2
-        self.geometry(f"+{px}+{py}")
-        self._user_entry.focus()
-
-    def _create(self):
-        user = self._user_var.get().strip()
-        pw   = self._pass_var.get()
-        conf = self._conf_var.get()
-
-        # Validation
-        if not user or not pw:
-            self._status_var.set("username and password are required"); return
-        if len(user) < 3:
-            self._status_var.set("username must be at least 3 characters"); return
-        if len(pw) < 6:
-            self._status_var.set("password must be at least 6 characters"); return
-        if pw != conf:
-            self._status_var.set("passwords do not match"); return
-        if user in USERS:
-            self._status_var.set("that username is taken"); return
-
-        self._status_var.set("creating account...")
-        self.config(cursor="watch")
-        self.update()
-
-        # Fetch existing remote users
-        remote_users, fetch_err = fetch_remote_users()
-
-        if fetch_err:
-            self._status_var.set(f"connection error: {fetch_err[:50]}")
-            self.config(cursor="")
-            return
-
-        if user in remote_users:
-            self._status_var.set("that username is already taken")
-            self.config(cursor="")
-            return
-
-        # Add new user and push
-        remote_users[user] = pw
-        success, err_msg = push_remote_users(remote_users)
-
-        self.config(cursor="")
-        if success:
-            self._status_var.set("")
-            self.configure(bg="#0d0010")
-            # Show success
-            for w in self.winfo_children():
-                w.destroy()
-            wrap = tk.Frame(self, bg="#0d0010", padx=48, pady=40)
-            wrap.pack()
-            tk.Label(wrap, text="✓", font=tkfont.Font(family="Segoe UI", size=32),
-                     bg="#0d0010", fg="#86efac").pack()
-            tk.Label(wrap, text="Account created!", font=tkfont.Font(family="Segoe UI", size=13, weight="bold"),
-                     bg="#0d0010", fg="#e9d5ff").pack(pady=(8, 4))
-            tk.Label(wrap, text=f"Welcome, {user}.\nYou can now log in.", font=tkfont.Font(family="Segoe UI", size=9),
-                     bg="#0d0010", fg="#6b21a8").pack()
-            close = tk.Label(wrap, text="Go to Login", font=tkfont.Font(family="Segoe UI", size=9, weight="bold"),
-                              bg="#4c1d95", fg="#e9d5ff", padx=20, pady=8, cursor="hand2")
-            close.pack(pady=(20, 0))
-            close.bind("<Button-1>", lambda e: self.destroy())
-        else:
-            self._status_var.set(f"error: {err_msg[:60]}" if err_msg else "could not connect — try again")
 
 
 if __name__ == "__main__":
