@@ -11,7 +11,7 @@ import urllib.request
 import urllib.error
 
 # ── Version & auto-update ─────────────────────────────────────────────────────
-CURRENT_VERSION = "1.4.0"
+CURRENT_VERSION = "1.4.1"
 # ▼▼ Replace these URLs with your actual web server paths ▼▼
 UPDATE_VERSION_URL = "https://mewpyyy.github.io/nebula-updates/version.json"
 UPDATE_SCRIPT_URL  = "https://mewpyyy.github.io/nebula-updates/ahk_manager.py"
