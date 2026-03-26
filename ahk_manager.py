@@ -11,7 +11,7 @@ import urllib.request
 import urllib.error
 
 # ── Version & auto-update ─────────────────────────────────────────────────────
-CURRENT_VERSION = "1.2.8"
+CURRENT_VERSION = "1.2.9"
 # ▼▼ Replace these URLs with your actual web server paths ▼▼
 UPDATE_VERSION_URL = "https://mewpyyy.github.io/nebula-updates/version.json"
 UPDATE_SCRIPT_URL  = "https://mewpyyy.github.io/nebula-updates/ahk_manager.py"
@@ -22,70 +22,46 @@ USERS = {
     "Physica": "PhysiaAdmin1",   # ← admin account, never remove this
 }
 
-# ── GitHub account system ─────────────────────────────────────────────────────
-GITHUB_REPO   = "mewpyyy/nebula-updates"
-GITHUB_BRANCH = "main"
-USERS_FILE    = "users.json"
+# ── JSONBin user storage ──────────────────────────────────────────────────────
+_JSONBIN_BIN_ID  = "69c47eaeaa77b81da91d4e50"
+_JSONBIN_KEY_KEY = 0x5A
+_JSONBIN_KEY_OBF = []
 
-# Token is XOR-obfuscated so GitHub's scanner doesn't auto-revoke it.
-# To update: run _obfuscate_token("your_new_token") and paste the result below.
-_TOKEN_KEY = 0x5A
-_TOKEN_OBF = []
+def _get_jsonbin_key():
+    return "".join(chr(b ^ _JSONBIN_KEY_KEY) for b in _JSONBIN_KEY_OBF)
 
-def _get_token():
-    return "".join(chr(b ^ _TOKEN_KEY) for b in _TOKEN_OBF)
-
-def _obfuscate_token(token):
-    """Helper — run this to get new obfuscated bytes when you change the token."""
-    return [ord(c) ^ _TOKEN_KEY for c in token]
-
-def _github_headers():
+def _jsonbin_headers():
     return {
-        "Authorization": f"token {_get_token()}",
-        "Accept": "application/vnd.github.v3+json",
         "Content-Type": "application/json",
+        "X-Master-Key": _get_jsonbin_key(),
+        "X-Bin-Versioning": "false",
     }
 
-def _github_read_headers():
-    """For read operations — no auth needed on public repo."""
-    return {
-        "Accept": "application/vnd.github.v3+json",
-        "User-Agent": "Nebula-App",
-    }
-
-GITHUB_API_BASE = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{USERS_FILE}"
+JSONBIN_URL = f"https://api.jsonbin.io/v3/b/{_JSONBIN_BIN_ID}"
 
 def fetch_remote_users():
-    """Fetch users.json from GitHub. Returns (dict_of_users, sha) or ({}, None)."""
+    """Fetch users from JSONBin. Returns (dict_of_users, None)."""
     try:
-        import base64
-        req = urllib.request.Request(GITHUB_API_BASE, headers=_github_read_headers())
+        req = urllib.request.Request(
+            JSONBIN_URL + "/latest",
+            headers=_jsonbin_headers()
+        )
         resp = urllib.request.urlopen(req, timeout=6)
         data = json.loads(resp.read().decode())
-        content = base64.b64decode(data["content"]).decode("utf-8")
-        users = json.loads(content)
-        return users, data["sha"]
-    except urllib.error.HTTPError as e:
-        if e.code == 404:
-            return {}, None
-        return {}, None
+        users = data.get("record", {}).get("users", {})
+        return users, None
     except Exception:
         return {}, None
 
 def push_remote_users(users, sha=None):
-    """Push updated users dict back to GitHub. sha required for updates."""
-    import base64
-    content = base64.b64encode(json.dumps(users, indent=2).encode()).decode()
-    payload = {
-        "message": "Nebula: update users",
-        "content": content,
-        "branch": GITHUB_BRANCH,
-    }
-    if sha:
-        payload["sha"] = sha
-    data = json.dumps(payload).encode()
-    req = urllib.request.Request(GITHUB_API_BASE, data=data,
-                                  headers=_github_headers(), method="PUT")
+    """Push updated users dict to JSONBin."""
+    payload = json.dumps({"users": users}).encode()
+    req = urllib.request.Request(
+        JSONBIN_URL,
+        data=payload,
+        headers=_jsonbin_headers(),
+        method="PUT"
+    )
     try:
         urllib.request.urlopen(req, timeout=10)
         return True, ""
@@ -96,7 +72,7 @@ def push_remote_users(users, sha=None):
         return False, str(ex)
 
 def validate_user_remote(username, password):
-    """Check credentials against GitHub users.json. Falls back to local USERS."""
+    """Check credentials against JSONBin users. Falls back to local USERS."""
     if USERS.get(username) == password:
         return True
     remote, _ = fetch_remote_users()
