@@ -11,7 +11,7 @@ import urllib.request
 import urllib.error
 
 # ── Version & auto-update ─────────────────────────────────────────────────────
-CURRENT_VERSION = "1.3.9"
+CURRENT_VERSION = "1.4.0"
 # ▼▼ Replace these URLs with your actual web server paths ▼▼
 UPDATE_VERSION_URL = "https://mewpyyy.github.io/nebula-updates/version.json"
 UPDATE_SCRIPT_URL  = "https://mewpyyy.github.io/nebula-updates/ahk_manager.py"
@@ -2093,6 +2093,10 @@ class AHKManager(tk.Tk):
     # ── Blank window ──────────────────────────────────────────────────────────
     def _open_blank_window(self):
         t = self._theme
+
+        # Hide main window
+        self.withdraw()
+
         win = tk.Toplevel(self)
         win.title("Nebula")
         win.resizable(True, True)
@@ -2102,6 +2106,13 @@ class AHKManager(tk.Tk):
             win.iconbitmap(resource_path("nebula.ico"))
         except Exception:
             pass
+
+        def go_back():
+            win.destroy()
+            self.deiconify()
+
+        # If user closes window via X, also restore main
+        win.protocol("WM_DELETE_WINDOW", go_back)
 
         # ── Header with buttons
         header = tk.Frame(win, bg=t["bg"], padx=20, pady=10)
@@ -2117,7 +2128,7 @@ class AHKManager(tk.Tk):
                              cursor="hand2", relief="flat",
                              highlightbackground=t["border"], highlightthickness=1)
         back_btn.pack(side="right")
-        back_btn.bind("<Button-1>", lambda e: win.destroy())
+        back_btn.bind("<Button-1>", lambda e: go_back())
 
         # Other header buttons mirrored
         for text, cmd in [("⚙ Theme", self._open_theme_editor),
@@ -2139,8 +2150,6 @@ class AHKManager(tk.Tk):
         tk.Label(centre, text="⬡",
                  font=tkfont.Font(family="Segoe Script", size=72, weight="bold"),
                  bg=t["bg"], fg=t["accent"]).pack(expand=True)
-
-        win.grab_set()
 
         # Centre on screen
         win.update_idletasks()
