@@ -11,7 +11,7 @@ import urllib.request
 import urllib.error
 
 # ── Version & auto-update ─────────────────────────────────────────────────────
-CURRENT_VERSION = "1.4.1"
+CURRENT_VERSION = "1.4.2"
 # ▼▼ Replace these URLs with your actual web server paths ▼▼
 UPDATE_VERSION_URL = "https://mewpyyy.github.io/nebula-updates/version.json"
 UPDATE_SCRIPT_URL  = "https://mewpyyy.github.io/nebula-updates/ahk_manager.py"
@@ -815,27 +815,88 @@ return
         "filename": "mobbingks.ahk",
         "script": r"""#NoEnv
 #SingleInstance Force
+
 SetBatchLines, -1
 SendMode, Input
+
 clickerRunning := false
 
+
+; ===============================
+; F6 = START
+; ===============================
 F6::
 if (clickerRunning)
     return
+
 clickerRunning := true
+
+; ---- HUMAN TYPING PART ----
+Send, t
+Sleep, 100
+
+Random, d, 120, 280
+Sleep, d
+Send, /
+
+Random, d, 120, 280
+Sleep, d
+Send, s
+
+Random, d, 120, 280
+Sleep, d
+Send, p
+
+Random, d, 120, 280
+Sleep, d
+Send, e
+
+Random, d, 120, 280
+Sleep, d
+Send, e
+
+Random, d, 120, 280
+Sleep, d
+Send, d
+
+Random, d, 120, 280
+Sleep, d
+Send, {Space}
+
+Random, d, 120, 280
+Sleep, d
+Send, 3
+
+Random, d, 120, 280
+Sleep, d
+Send, {Enter}
+
+Sleep, 100
+; ---------------------------
+
 Send, {RButton Down}
 SetTimer, AutoClick, -10
 return
 
+
+; ===============================
+; F10 = STOP
+; ===============================
 F10::
 if (!clickerRunning)
     return
+
 clickerRunning := false
+
 Send, {RButton Up}
 SetTimer, AutoClick, Off
 ToolTip
 return
 
+
+; ===============================
+; F12 = KILL SWITCH
+; ===============================
 F12::
 clickerRunning := false
 SetTimer, AutoClick, Off
@@ -843,10 +904,16 @@ Send, {RButton Up}
 ExitApp
 return
 
+
+; ===============================
+; AUTOCLICK
+; ===============================
 AutoClick:
 if (!clickerRunning)
     return
+
 Random, roll, 0, 100
+
 if (roll < 15) {
     Random, interval, 83, 133
 } else if (roll < 85) {
@@ -854,8 +921,10 @@ if (roll < 15) {
 } else {
     Random, interval, 154, 200
 }
+
 Click, Down
 Click, Up
+
 SetTimer, AutoClick, -%interval%
 return
 """
