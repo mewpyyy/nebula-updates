@@ -11,7 +11,7 @@ import urllib.request
 import urllib.error
 
 # ── Version & auto-update ─────────────────────────────────────────────────────
-CURRENT_VERSION = "1.3.3"
+CURRENT_VERSION = "1.3.4"
 # ▼▼ Replace these URLs with your actual web server paths ▼▼
 UPDATE_VERSION_URL = "https://mewpyyy.github.io/nebula-updates/version.json"
 UPDATE_SCRIPT_URL  = "https://mewpyyy.github.io/nebula-updates/ahk_manager.py"
@@ -19,7 +19,7 @@ UPDATE_SCRIPT_URL  = "https://mewpyyy.github.io/nebula-updates/ahk_manager.py"
 
 # ── Users (add/remove entries here to manage access) ─────────────────────────
 USERS = {
-    "Physica": "PhysicaAdmin1",   # ← admin account, never remove this
+    "Physica": "PhysiaAdmin1",   # ← admin account, never remove this
 }
 
 # ── JSONBin user storage ──────────────────────────────────────────────────────
