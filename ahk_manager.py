@@ -11,7 +11,7 @@ import urllib.request
 import urllib.error
 
 # ── Version & auto-update ─────────────────────────────────────────────────────
-CURRENT_VERSION = "1.2.9"
+CURRENT_VERSION = "1.3.0"
 # ▼▼ Replace these URLs with your actual web server paths ▼▼
 UPDATE_VERSION_URL = "https://mewpyyy.github.io/nebula-updates/version.json"
 UPDATE_SCRIPT_URL  = "https://mewpyyy.github.io/nebula-updates/ahk_manager.py"
@@ -34,6 +34,7 @@ def _jsonbin_headers():
     return {
         "Content-Type": "application/json",
         "X-Master-Key": _get_jsonbin_key(),
+        "X-Access-Key": _get_jsonbin_key(),
         "X-Bin-Versioning": "false",
     }
 
