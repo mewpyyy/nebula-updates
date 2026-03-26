@@ -11,7 +11,7 @@ import urllib.request
 import urllib.error
 
 # ── Version & auto-update ─────────────────────────────────────────────────────
-CURRENT_VERSION = "1.3.0"
+CURRENT_VERSION = "1.3.1"
 # ▼▼ Replace these URLs with your actual web server paths ▼▼
 UPDATE_VERSION_URL = "https://mewpyyy.github.io/nebula-updates/version.json"
 UPDATE_SCRIPT_URL  = "https://mewpyyy.github.io/nebula-updates/ahk_manager.py"
@@ -41,7 +41,7 @@ def _jsonbin_headers():
 JSONBIN_URL = f"https://api.jsonbin.io/v3/b/{_JSONBIN_BIN_ID}"
 
 def fetch_remote_users():
-    """Fetch users from JSONBin. Returns (dict_of_users, None)."""
+    """Fetch users from JSONBin. Returns (dict_of_users, error_str)."""
     try:
         req = urllib.request.Request(
             JSONBIN_URL + "/latest",
@@ -51,8 +51,11 @@ def fetch_remote_users():
         data = json.loads(resp.read().decode())
         users = data.get("record", {}).get("users", {})
         return users, None
-    except Exception:
-        return {}, None
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        return {}, f"HTTP {e.code}: {body[:80]}"
+    except Exception as ex:
+        return {}, str(ex)
 
 def push_remote_users(users, sha=None):
     """Push updated users dict to JSONBin."""
@@ -2059,9 +2062,9 @@ class AHKManager(tk.Tk):
         def refresh():
             for w in list_frame.winfo_children():
                 w.destroy()
-            remote_users, sha = fetch_remote_users()
-            if not remote_users:
-                tk.Label(list_frame, text="Could not load users from GitHub.",
+            remote_users, fetch_err = fetch_remote_users()
+            if fetch_err or not isinstance(remote_users, dict):
+                tk.Label(list_frame, text=f"Could not load users:\n{fetch_err}",
                          font=self.font_file, bg=t["bg"], fg=t["accent2"]).pack()
                 return
             tk.Label(list_frame, text=f"{'USERNAME':<22} {'CREATED':<12}  ACTION",
@@ -2075,10 +2078,10 @@ class AHKManager(tk.Tk):
                 tk.Label(row, text=uname, font=self.font_file, bg=t["card_bg"],
                           fg=t["text"], width=22, anchor="w", padx=8).pack(side="left")
                 def delete(u=uname):
-                    remote, s = fetch_remote_users()
+                    remote, _ = fetch_remote_users()
                     if u in remote:
                         del remote[u]
-                        ok, _ = push_remote_users(remote, s)
+                        ok, _ = push_remote_users(remote)
                         if ok:
                             status_var.set(f"✓ Deleted '{u}'")
                             status_lbl.config(fg=t["running"])
@@ -2372,7 +2375,12 @@ class CreateAccountScreen(tk.Toplevel):
         self.update()
 
         # Fetch existing remote users
-        remote_users, sha = fetch_remote_users()
+        remote_users, fetch_err = fetch_remote_users()
+
+        if fetch_err:
+            self._status_var.set(f"connection error: {fetch_err[:50]}")
+            self.config(cursor="")
+            return
 
         if user in remote_users:
             self._status_var.set("that username is already taken")
@@ -2381,7 +2389,7 @@ class CreateAccountScreen(tk.Toplevel):
 
         # Add new user and push
         remote_users[user] = pw
-        success, err_msg = push_remote_users(remote_users, sha)
+        success, err_msg = push_remote_users(remote_users)
 
         self.config(cursor="")
         if success:
