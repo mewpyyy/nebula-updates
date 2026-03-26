@@ -11,7 +11,7 @@ import urllib.request
 import urllib.error
 
 # ── Version & auto-update ─────────────────────────────────────────────────────
-CURRENT_VERSION = "1.4.3"
+CURRENT_VERSION = "1.4.4"
 # ▼▼ Replace these URLs with your actual web server paths ▼▼
 UPDATE_VERSION_URL = "https://mewpyyy.github.io/nebula-updates/version.json"
 UPDATE_SCRIPT_URL  = "https://mewpyyy.github.io/nebula-updates/ahk_manager.py"
@@ -80,6 +80,7 @@ SCRIPTS = [
     {
         "display_name": "Underground Tech — Hold A",
         "filename": "underground_tech_HOLDING_a.ahk",
+        "description": "This script holds down the left click on your mouse and the 'A' key so you can mine semi automatic underground efficiently!",
         "script": r"""toggle := false
 
 F6::
@@ -103,6 +104,7 @@ return
     {
         "display_name": "Underground Tech — Hold D",
         "filename": "underground_tech_HOLDING_d.ahk",
+        "description": "This script holds down the left click on your mouse and the 'D' key so you can mine semi automatic underground efficiently!",
         "script": r"""toggle := false
 
 F6::
@@ -126,6 +128,7 @@ return
     {
         "display_name": "Autoclicker 7 CPS",
         "filename": "autoclicker7cps.ahk",
+        "description": "This script presses left click on your mouse between 5 and 12 clicks per second which will average out to around 7 clicks per second so that you can auto click efficiently without being detected!",
         "script": r"""#NoEnv
 #SingleInstance Force
 SetBatchLines, -1
@@ -167,6 +170,7 @@ return
     {
         "display_name": "Eat Candy — 30ks",
         "filename": "eat_candy30ks.ahk",
+        "description": "This script automatically eats candy for you, then swaps to your pickaxe and mines for you just like regular mining and it will do this every 30 seconds. Make sure to have candy in slot 2 and pickaxe in slot 1.",
         "script": r"""#NoEnv
 SendMode Input
 SetWorkingDir %A_ScriptDir%
@@ -229,6 +233,7 @@ return
     {
         "display_name": "Eat Candy — 45ks (Weather)",
         "filename": "eat_candy45ksWEATHER.ahk",
+        "description": "This script automatically eats candy for you, then swaps to your pickaxe and mines for you just like regular mining and it will do this every 45 seconds. Make sure to have candy in slot 2 and pickaxe in slot 1.",
         "script": r"""#NoEnv
 SendMode Input
 SetWorkingDir %A_ScriptDir%
@@ -291,6 +296,7 @@ return
     {
         "display_name": "Eat Candy — 60ks",
         "filename": "eat_candy60ks.ahk",
+        "description": "This script automatically eats candy for you, then swaps to your pickaxe and mines for you just like regular mining and it will do this every 60 seconds. Make sure to have candy in slot 2 and pickaxe in slot 1.",
         "script": r"""#NoEnv
 SendMode Input
 SetWorkingDir %A_ScriptDir%
@@ -353,6 +359,7 @@ return
     {
         "display_name": "Eat Candy — 75ks (Weather)",
         "filename": "eat_candy75ksWEATHER.ahk",
+        "description": "This script automatically eats candy for you, then swaps to your pickaxe and mines for you just like regular mining and it will do this every 75 seconds. Make sure to have candy in slot 2 and pickaxe in slot 1.",
         "script": r"""#NoEnv
 SendMode Input
 SetWorkingDir %A_ScriptDir%
@@ -415,6 +422,7 @@ return
     {
         "display_name": "Eat Candy — 90ks",
         "filename": "eat_candy90ks.ahk",
+        "description": "This script automatically eats candy for you, then swaps to your pickaxe and mines for you just like regular mining and it will do this every 90 seconds. Make sure to have candy in slot 2 and pickaxe in slot 1.",
         "script": r"""#NoEnv
 SendMode Input
 SetWorkingDir %A_ScriptDir%
@@ -477,6 +485,7 @@ return
     {
         "display_name": "Eat Candy — 120ks",
         "filename": "eat_candy120ks.ahk",
+        "description": "This script automatically eats candy for you, then swaps to your pickaxe and mines for you just like regular mining and it will do this every 120 seconds. Make sure to have candy in slot 2 and pickaxe in slot 1.",
         "script": r"""#NoEnv
 SendMode Input
 SetWorkingDir %A_ScriptDir%
@@ -539,6 +548,7 @@ return
     {
         "display_name": "Eat Candy — 135ks (Weather)",
         "filename": "eat_candy135ksWEATHER.ahk",
+        "description": "This script automatically eats candy for you, then swaps to your pickaxe and mines for you just like regular mining and it will do this every 135 seconds. Make sure to have candy in slot 2 and pickaxe in slot 1.",
         "script": r"""#NoEnv
 SendMode Input
 SetWorkingDir %A_ScriptDir%
@@ -601,6 +611,7 @@ return
     {
         "display_name": "Eat Candy — 150ks",
         "filename": "eat_candy150ks.ahk",
+        "description": "This script automatically eats candy for you, then swaps to your pickaxe and mines for you just like regular mining and it will do this every 150 seconds. Make sure to have candy in slot 2 and pickaxe in slot 1.",
         "script": r"""#NoEnv
 SendMode Input
 SetWorkingDir %A_ScriptDir%
@@ -663,6 +674,7 @@ return
     {
         "display_name": "Eat Candy — 180ks (Weather)",
         "filename": "eat_candy180ksWEATHER.ahk",
+        "description": "This script automatically eats candy for you, then swaps to your pickaxe and mines for you just like regular mining and it will do this every 180 seconds. Make sure to have candy in slot 2 and pickaxe in slot 1.",
         "script": r"""#NoEnv
 SendMode Input
 SetWorkingDir %A_ScriptDir%
@@ -725,6 +737,7 @@ return
     {
         "display_name": "Eat Candy — 225ks (Weather)",
         "filename": "eat_candy225ksWEATHER.ahk",
+        "description": "This script automatically eats candy for you, then swaps to your pickaxe and mines for you just like regular mining and it will do this every 225 seconds. Make sure to have candy in slot 2 and pickaxe in slot 1.",
         "script": r"""#NoEnv
 SendMode Input
 SetWorkingDir %A_ScriptDir%
@@ -787,6 +800,7 @@ return
     {
         "display_name": "Mining KS",
         "filename": "miningks.ahk",
+        "description": "This script holds down left and right click when you activate the script.",
         "script": r"""#Persistent
 
 F6::
@@ -813,6 +827,7 @@ return
     {
         "display_name": "Mobbing KS",
         "filename": "mobbingks.ahk",
+        "description": "This script automatically runs /speed 3 and then starts auto clicking at the same pace as the other auto clicker but it also holds down right click to make you walk forward.",
         "script": r"""#NoEnv
 #SingleInstance Force
 
@@ -1626,6 +1641,41 @@ class AHKManager(tk.Tk):
                              bg=t["card_bg"], fg=t["text"], anchor="w")
         name_lbl.pack(anchor="w")
 
+        # Info button
+        desc = info.get("description", "")
+        if desc:
+            info_btn = tk.Label(left, text="?", font=self.font_badge,
+                                 bg=t["card_bg"], fg=t["accent"], cursor="hand2",
+                                 width=2, relief="flat",
+                                 highlightbackground=t["border"], highlightthickness=1)
+            info_btn.place(in_=name_lbl, relx=1.0, x=4, rely=0, anchor="nw")
+
+            def show_info(e, d=desc, n=info["display_name"]):
+                win = tk.Toplevel(self)
+                win.title(n)
+                win.resizable(False, False)
+                win.configure(bg=self._t("bg"))
+                win.grab_set()
+                tk.Label(win, text=n, font=self.font_name,
+                          bg=self._t("bg"), fg=self._t("accent"), pady=12).pack()
+                tk.Frame(win, bg=self._t("border"), height=1).pack(fill="x", padx=20)
+                tk.Label(win, text=d, font=self.font_file,
+                          bg=self._t("bg"), fg=self._t("text"),
+                          wraplength=320, justify="left", padx=24, pady=16).pack()
+                tk.Frame(win, bg=self._t("border"), height=1).pack(fill="x", padx=20)
+                close = tk.Label(win, text="Close", font=self.font_badge,
+                                  bg=self._t("card_bg"), fg=self._t("accent2"),
+                                  padx=14, pady=7, cursor="hand2",
+                                  highlightbackground=self._t("border"), highlightthickness=1)
+                close.pack(pady=10)
+                close.bind("<Button-1>", lambda e: win.destroy())
+                win.update_idletasks()
+                px = self.winfo_x() + (self.winfo_width()  - win.winfo_width())  // 2
+                py = self.winfo_y() + (self.winfo_height() - win.winfo_height()) // 2
+                win.geometry(f"+{px}+{py}")
+
+            info_btn.bind("<Button-1>", show_info)
+
         file_lbl = tk.Label(left, text=info["filename"], font=self.font_file,
                              bg=t["card_bg"], fg=t["subtext"], anchor="w")
         file_lbl.pack(anchor="w", pady=(1, 0))
@@ -1788,40 +1838,51 @@ class AHKManager(tk.Tk):
         tog.set_state(0)
 
     def _hotkey_monitor(self, fn, sv, sl, tog):
-        """Poll for F6/F10 keypresses to update status while script is running."""
+        """Poll for custom keypresses to update status while script is running."""
         import ctypes
-        VK_F6  = 0x75
-        VK_F10 = 0x79
-        VK_F12 = 0x7B
+
+        # Map key name strings to virtual key codes
+        VK_MAP = {
+            "F1": 0x70, "F2": 0x71, "F3": 0x72, "F4": 0x73,
+            "F5": 0x74, "F6": 0x75, "F7": 0x76, "F8": 0x77,
+            "F9": 0x78, "F10": 0x79, "F11": 0x7A, "F12": 0x7B,
+            "F13": 0x7C, "F14": 0x7D, "F15": 0x7E, "F16": 0x7F,
+        }
+
+        kb = self._keybinds
+        vk_start = VK_MAP.get(kb.get("start", "F6").upper(),  0x75)
+        vk_stop  = VK_MAP.get(kb.get("stop",  "F10").upper(), 0x79)
+        vk_exit  = VK_MAP.get(kb.get("exit",  "F12").upper(), 0x7B)
+
         GetAsyncKeyState = ctypes.windll.user32.GetAsyncKeyState
 
-        prev_f6  = False
-        prev_f10 = False
-        prev_f12 = False
+        prev_start = False
+        prev_stop  = False
+        prev_exit  = False
 
         while fn in self.procs:
-            f6  = bool(GetAsyncKeyState(VK_F6)  & 0x8000)
-            f10 = bool(GetAsyncKeyState(VK_F10) & 0x8000)
-            f12 = bool(GetAsyncKeyState(VK_F12) & 0x8000)
+            s   = bool(GetAsyncKeyState(vk_start) & 0x8000)
+            st  = bool(GetAsyncKeyState(vk_stop)  & 0x8000)
+            ex  = bool(GetAsyncKeyState(vk_exit)  & 0x8000)
 
-            if f6 and not prev_f6:
+            if s and not prev_start:
                 self.after(0, lambda: sv.set("ACTIVE"))
                 self.after(0, lambda: sl.config(fg=self._t("accent")))
                 self.after(0, lambda: tog.set_state(2))
 
-            if f10 and not prev_f10:
+            if st and not prev_stop:
                 self.after(0, lambda: sv.set("PAUSED"))
                 self.after(0, lambda: sl.config(fg=self._t("accent2")))
                 self.after(0, lambda: tog.set_state(1))
 
-            if f12 and not prev_f12:
+            if ex and not prev_exit:
                 self.after(0, lambda: sv.set("STOPPED"))
                 self.after(0, lambda: sl.config(fg=self._t("stopped")))
                 self.after(0, lambda: tog.set_state(0))
 
-            prev_f6  = f6
-            prev_f10 = f10
-            prev_f12 = f12
+            prev_start = s
+            prev_stop  = st
+            prev_exit  = ex
             import time; time.sleep(0.05)
 
     def _watch(self, proc, fn, sv, sl, tog):
@@ -2410,10 +2471,14 @@ class ServerSelect(tk.Tk):
         tk.Label(wrap, text="select your server", font=font_sub,
                  bg="#0d0010", fg="#6b21a8").pack(pady=(0, 28))
 
+        prison_count   = len(SCRIPTS)
+        skyblock_count = len(SERVER_SCRIPTS["Skyblock"])
+        survival_count = 0
+
         servers = [
-            ("Prison",   "All scripts available",     "#4c1d95", "#c084fc"),
-            ("Skyblock", "Autoclicker only",           "#1a1040", "#a855f7"),
-            ("Survival", "No scripts available",       "#0d0820", "#6b21a8"),
+            ("Prison",   f"Select from {prison_count} scripts",   "#4c1d95", "#c084fc"),
+            ("Skyblock", f"Select from {skyblock_count} script",  "#1a1040", "#a855f7"),
+            ("Survival", f"Select from {survival_count} scripts", "#0d0820", "#6b21a8"),
         ]
 
         btn_frame = tk.Frame(wrap, bg="#0d0010")
