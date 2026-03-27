@@ -11,7 +11,7 @@ import urllib.request
 import urllib.error
 
 # ── Version & auto-update ─────────────────────────────────────────────────────
-CURRENT_VERSION = "1.4.8"
+CURRENT_VERSION = "1.4.9"
 # ▼▼ Replace these URLs with your actual web server paths ▼▼
 UPDATE_VERSION_URL = "https://mewpyyy.github.io/nebula-updates/version.json"
 UPDATE_SCRIPT_URL  = "https://mewpyyy.github.io/nebula-updates/ahk_manager.py"
@@ -1876,8 +1876,11 @@ class AHKManager(tk.Tk):
         else:
             timer_var.set(f"{m:02d}:{s:02d}")
         self.after(1000, lambda: self._run_timer(fn, start_time, timer_var))
+
+    def _hotkey_monitor(self, fn, sv, sl, tog):
         """Poll for custom keypresses to update status while script is running."""
         import ctypes
+        import time
 
         # Map key name strings to virtual key codes
         VK_MAP = {
@@ -1921,7 +1924,7 @@ class AHKManager(tk.Tk):
             prev_start = s
             prev_stop  = st
             prev_exit  = ex
-            import time; time.sleep(0.05)
+            time.sleep(0.05)
 
     def _watch(self, proc, fn, sv, sl, tog):
         proc.wait()
@@ -2512,7 +2515,7 @@ PATCH_NOTES_URL = "https://mewpyyy.github.io/nebula-updates/patch_notes.json"
 SERVER_FILE     = os.path.join(os.path.expanduser("~"), ".ahkmanager_server.json")
 
 PATCH_NOTES = {
-    "1.4.8": [
+    "1.4.9": [
         "Version number now displayed next to the Nebula logo (e.g. Nebula v1.4.6)",
         "App now remembers your last selected server — no need to pick every time",
         "Added 'Change Server' button in the header to return to server selection",
