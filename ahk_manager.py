@@ -11,7 +11,7 @@ import urllib.request
 import urllib.error
 
 # ── Version & auto-update ─────────────────────────────────────────────────────
-CURRENT_VERSION = "1.5.7"
+CURRENT_VERSION = "1.5.8"
 # ▼▼ Replace these URLs with your actual web server paths ▼▼
 UPDATE_VERSION_URL = "https://mewpyyy.github.io/nebula-updates/version.json"
 UPDATE_SCRIPT_URL  = "https://mewpyyy.github.io/nebula-updates/ahk_manager.py"
@@ -1404,60 +1404,79 @@ class CaptchaSolver:
         self._running = False
 
     # ── Detection loop ────────────────────────────────────────────────────────
+    def _debug(self, msg):
+        """Append a debug line to the log file on the desktop."""
+        import datetime, os
+        try:
+            log = os.path.join(os.path.expanduser("~"), "Desktop", "nebula_captcha_debug.txt")
+            with open(log, "a", encoding="utf-8") as f:
+                f.write(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] {msg}\n")
+        except Exception:
+            pass
+
     def _watch_loop(self):
         import time
+        self._debug("SOLVER STARTED")
         while self._running:
             try:
                 if self._mgr.procs and not self._solving:
                     if self._captcha_visible():
+                        self._debug("CAPTCHA DETECTED — starting handler")
                         self._handle_captcha()
-            except Exception:
-                pass
+            except Exception as e:
+                self._debug(f"WATCH LOOP ERROR: {e}")
             time.sleep(0.3)
+        self._debug("SOLVER STOPPED")
 
     def _captcha_visible(self):
-        """Detect the 'Captcha' title text via pixel brightness scan."""
+        """
+        Detect the Minecraft chest UI by sampling exact pixel colours.
+        Checks THREE specific positions for the chest grey (#C6C6C6) and
+        dark border (#555555). Logs sampled colours to debug file.
+        """
         try:
             import ctypes
+
             sw = ctypes.windll.user32.GetSystemMetrics(0)
             sh = ctypes.windll.user32.GetSystemMetrics(1)
+            cx = sw // 2
 
-            cx       = sw // 2
-            title_y  = int(sh * 0.235)
-            sample_x = cx - 95
-            sample_w = 190
-            sample_h = 12
+            def sample_pixel(x, y):
+                hdc = ctypes.windll.user32.GetDC(0)
+                col = ctypes.windll.gdi32.GetPixel(hdc, x, y)
+                ctypes.windll.user32.ReleaseDC(0, hdc)
+                return col & 0xFF, (col >> 8) & 0xFF, (col >> 16) & 0xFF
 
-            hdc_screen = ctypes.windll.user32.GetDC(0)
-            hdc_mem    = ctypes.windll.gdi32.CreateCompatibleDC(hdc_screen)
-            hbmp       = ctypes.windll.gdi32.CreateCompatibleBitmap(hdc_screen, sample_w, sample_h)
-            ctypes.windll.gdi32.SelectObject(hdc_mem, hbmp)
-            ctypes.windll.gdi32.BitBlt(hdc_mem, 0, 0, sample_w, sample_h,
-                                        hdc_screen, sample_x, title_y, 0x00CC0020)
+            def colour_match(r, g, b, tr, tg, tb, tol=18):
+                return abs(r-tr) <= tol and abs(g-tg) <= tol and abs(b-tb) <= tol
 
-            buf = (ctypes.c_uint32 * (sample_w * sample_h))()
-            bmi = (ctypes.c_uint32 * 12)()
-            bmi[0] = 40
-            bmi[1] = sample_w
-            bmi[2] = -sample_h
-            bmi[3] = 1 | (32 << 16)
-            ctypes.windll.gdi32.GetDIBits(hdc_mem, hbmp, 0, sample_h, buf, bmi, 0)
-            ctypes.windll.gdi32.DeleteObject(hbmp)
-            ctypes.windll.gdi32.DeleteDC(hdc_mem)
-            ctypes.windll.user32.ReleaseDC(0, hdc_screen)
+            CHEST_GREY = (198, 198, 198)
+            CHEST_DARK = (85, 85, 85)
 
-            bright = sum(1 for px in buf
-                         if (0.299 * ((px >> 16) & 0xFF)
-                             + 0.587 * ((px >> 8) & 0xFF)
-                             + 0.114 * (px & 0xFF)) > 180)
-            dark   = sum(1 for px in buf
-                         if (0.299 * ((px >> 16) & 0xFF)
-                             + 0.587 * ((px >> 8) & 0xFF)
-                             + 0.114 * (px & 0xFF)) < 80)
-            total  = sample_w * sample_h
-            return 0.06 < (bright / total) < 0.35 and (dark / total) > 0.45
+            title_y  = int(sh * 0.238)
+            left_x   = int(sw * 0.390)
+            right_x  = int(sw * 0.610)
+            border_y = int(sh * 0.325)
 
-        except Exception:
+            p1 = sample_pixel(left_x,  title_y)
+            p2 = sample_pixel(right_x, title_y)
+            p3 = sample_pixel(cx,      border_y)
+
+            result = (colour_match(*p1, *CHEST_GREY)
+                      and colour_match(*p2, *CHEST_GREY)
+                      and colour_match(*p3, *CHEST_DARK))
+
+            # Write debug info every ~3s (only when something interesting is seen)
+            if any(colour_match(*p, *CHEST_GREY, tol=40) for p in [p1, p2]):
+                self._debug(f"DETECT screen={sw}x{sh} "
+                            f"p1={p1}@({left_x},{title_y}) "
+                            f"p2={p2}@({right_x},{title_y}) "
+                            f"p3={p3}@({cx},{border_y}) "
+                            f"result={result}")
+            return result
+
+        except Exception as e:
+            self._debug(f"DETECT ERROR: {e}")
             return False
 
     # ── Captcha handler ───────────────────────────────────────────────────────
@@ -1467,6 +1486,7 @@ class CaptchaSolver:
         import ctypes
         import ctypes.wintypes
         self._solving = True
+        self._debug("HANDLER: releasing keys")
         try:
             # Step 1 — Release all held keys/buttons, repeated 3x with small
             # gaps to ensure AHK held inputs are fully cleared before proceeding
@@ -1483,6 +1503,7 @@ class CaptchaSolver:
             # Step 3 — Glide mouse to the sign position smoothly.
             # Using small steps prevents the game snapping the cursor back.
             sx, sy = self._get_sign_pos()
+            self._debug(f"HANDLER: gliding to sign pos ({sx},{sy})")
             self._glide_mouse(sx, sy)
 
             # Step 4 — Verify cursor actually reached the sign (not fought back).
@@ -1504,8 +1525,10 @@ class CaptchaSolver:
             time.sleep(0.6)
 
             # Step 6 — Screenshot with the tooltip visible
+            self._debug("HANDLER: taking screenshot")
             img_b64 = self._screenshot_captcha()
             if not img_b64:
+                self._debug("HANDLER: screenshot failed")
                 self._solving = False
                 return
 
@@ -1516,8 +1539,11 @@ class CaptchaSolver:
             time.sleep(pre_wait)
 
             # Step 8 — Ask Claude vision which slot to click
+            self._debug("HANDLER: calling Cloudflare worker")
             slot = self._ask_claude(img_b64)
+            self._debug(f"HANDLER: Claude returned slot={slot}")
             if slot is None:
+                self._debug("HANDLER: no slot returned — aborting")
                 self._solving = False
                 return
 
@@ -2861,7 +2887,7 @@ PATCH_NOTES_URL = "https://mewpyyy.github.io/nebula-updates/patch_notes.json"
 SERVER_FILE     = os.path.join(os.path.expanduser("~"), ".ahkmanager_server.json")
 
 PATCH_NOTES = {
-    "1.5.7": [
+    "1.5.8": [
         "Version number now displayed next to the Nebula logo (e.g. Nebula v1.4.6)",
         "App now remembers your last selected server — no need to pick every time",
         "Added 'Change Server' button in the header to return to server selection",
