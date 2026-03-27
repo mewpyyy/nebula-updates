@@ -1432,7 +1432,7 @@ class AHKManager(tk.Tk):
         self._header = tk.Frame(self, bg=t["bg"], padx=28, pady=14)
         self._header.pack(fill="x")
 
-        self._title_lbl = tk.Label(self._header, text="⬡ Nebula",
+        self._title_lbl = tk.Label(self._header, text=f"⬡ Nebula  v{CURRENT_VERSION}",
                                     font=tkfont.Font(family="Segoe Script", size=15, weight="bold"),
                                     bg=t["bg"], fg=t["accent"])
         self._title_lbl.pack(side="left")
@@ -1473,6 +1473,14 @@ class AHKManager(tk.Tk):
                                     highlightbackground=t["border"], highlightthickness=1)
         self._blank_btn.pack(side="right", padx=(0, 8))
         self._blank_btn.bind("<Button-1>", lambda e: self._open_blank_window())
+
+        # Change server button
+        self._server_btn = tk.Label(self._header, text=f"🌐 {self._server}", font=self.font_badge,
+                                     bg=t["card_bg"], fg=t["accent"], padx=10, pady=5,
+                                     cursor="hand2", relief="flat",
+                                     highlightbackground=t["border"], highlightthickness=1)
+        self._server_btn.pack(side="right", padx=(0, 8))
+        self._server_btn.bind("<Button-1>", lambda e: self._change_server())
 
         # Admin panel button (Physica only)
         if self._is_admin:
@@ -1695,7 +1703,13 @@ class AHKManager(tk.Tk):
         sv = tk.StringVar(value="STOPPED")
         sl = tk.Label(right, textvariable=sv, font=self.font_status,
                       bg=t["card_bg"], fg=t["stopped"], width=9, anchor="e")
-        sl.pack(anchor="e", pady=(0, 8))
+        sl.pack(anchor="e", pady=(0, 4))
+
+        # Runtime counter
+        timer_var = tk.StringVar(value="")
+        timer_lbl = tk.Label(right, textvariable=timer_var, font=self.font_file,
+                              bg=t["card_bg"], fg=t["subtext"], anchor="e")
+        timer_lbl.pack(anchor="e", pady=(0, 4))
         sl.bind("<Enter>", on_enter)
         sl.bind("<Leave>", on_leave)
 
@@ -1715,6 +1729,7 @@ class AHKManager(tk.Tk):
             "name_lbl": name_lbl, "file_lbl": file_lbl, "stats_lbl": stats_lbl,
             "star_lbl": star_lbl,
             "status_lbl": sl, "status_var": sv, "toggle": tog,
+            "timer_var": timer_var, "timer_lbl": timer_lbl,
             "info": info,
             "on_enter": on_enter, "on_leave": on_leave,
         }
@@ -1740,6 +1755,8 @@ class AHKManager(tk.Tk):
                              highlightbackground=t["border"])
         self._blank_btn.config(bg=t["card_bg"], fg=t["accent"],
                                 highlightbackground=t["border"])
+        self._server_btn.config(bg=t["card_bg"], fg=t["accent"],
+                                 highlightbackground=t["border"])
         if self._is_admin and hasattr(self, "_admin_btn"):
             self._admin_btn.config(bg=t["card_bg"], fg=t["running"],
                                     highlightbackground=t["border"])
@@ -1768,6 +1785,7 @@ class AHKManager(tk.Tk):
             card["name_lbl"].config(bg=t["card_bg"], fg=t["text"])
             card["file_lbl"].config(bg=t["card_bg"], fg=t["subtext"])
             card["stats_lbl"].config(bg=t["card_bg"], fg=t["subtext"])
+            card["timer_lbl"].config(bg=t["card_bg"], fg=t["subtext"])
             fn = card["info"]["filename"]
             is_fav = fn in self._favs
             card["star_lbl"].config(bg=t["card_bg"],
@@ -1827,6 +1845,13 @@ class AHKManager(tk.Tk):
                              daemon=True).start()
             threading.Thread(target=self._hotkey_monitor, args=(fn, sv, sl, tog),
                              daemon=True).start()
+            # Start runtime timer
+            import datetime
+            start_time = datetime.datetime.now()
+            for card in self._card_refs:
+                if card["info"]["filename"] == fn:
+                    self._run_timer(fn, start_time, card["timer_var"])
+                    break
         except Exception:
             sv.set("ERROR"); sl.config(fg=self._t("accent2"))
 
@@ -1836,8 +1861,26 @@ class AHKManager(tk.Tk):
             proc.terminate()
         sv.set("STOPPED"); sl.config(fg=self._t("stopped"))
         tog.set_state(0)
+        for card in self._card_refs:
+            if card["info"]["filename"] == fn:
+                card["timer_var"].set("")
+                break
 
-    def _hotkey_monitor(self, fn, sv, sl, tog):
+    def _run_timer(self, fn, start_time, timer_var):
+        """Update the runtime counter every second while script is running."""
+        import datetime
+        if fn not in self.procs:
+            timer_var.set("")
+            return
+        elapsed = datetime.datetime.now() - start_time
+        total_s = int(elapsed.total_seconds())
+        h, rem = divmod(total_s, 3600)
+        m, s   = divmod(rem, 60)
+        if h > 0:
+            timer_var.set(f"{h:02d}:{m:02d}:{s:02d}")
+        else:
+            timer_var.set(f"{m:02d}:{s:02d}")
+        self.after(1000, lambda: self._run_timer(fn, start_time, timer_var))
         """Poll for custom keypresses to update status while script is running."""
         import ctypes
 
@@ -2075,7 +2118,28 @@ class AHKManager(tk.Tk):
                  bg=t["bg"], fg=t["subtext"]).pack(anchor="w")
         tk.Label(frame, text=f"New version:       {latest_version}", font=self.font_file,
                  bg=t["bg"], fg=t["running"]).pack(anchor="w", pady=(4, 0))
-        tk.Label(frame, text="\nWould you like to update now?\nThe app will restart automatically.",
+
+        # Fetch and show patch notes
+        try:
+            import time
+            url = f"{PATCH_NOTES_URL}?t={int(time.time())}"
+            req = urllib.request.Request(url, headers={"Cache-Control": "no-cache", "User-Agent": "Nebula-Updater"})
+            resp = urllib.request.urlopen(req, timeout=5)
+            notes_data = json.loads(resp.read().decode())
+            notes = notes_data.get(latest_version, [])
+        except Exception:
+            notes = PATCH_NOTES.get(latest_version, [])
+
+        if notes:
+            tk.Frame(frame, bg=t["border"], height=1).pack(fill="x", pady=(12, 8))
+            tk.Label(frame, text=f"What's new in v{latest_version}:", font=self.font_status,
+                     bg=t["bg"], fg=t["accent"]).pack(anchor="w")
+            for note in notes:
+                tk.Label(frame, text=f"  • {note}", font=self.font_file,
+                          bg=t["bg"], fg=t["text"], wraplength=340,
+                          justify="left", anchor="w").pack(anchor="w", pady=1)
+
+        tk.Label(frame, text="\nWould you like to update now?",
                  font=self.font_file, bg=t["bg"], fg=t["text"]).pack()
 
         tk.Frame(win, bg=t["border"], height=1).pack(fill="x", padx=20)
@@ -2219,6 +2283,16 @@ class AHKManager(tk.Tk):
         px = self.winfo_x() + (self.winfo_width()  - win.winfo_width())  // 2
         py = self.winfo_y() + (self.winfo_height() - win.winfo_height()) // 2
         win.geometry(f"+{px}+{py}")
+
+    # ── Change server ─────────────────────────────────────────────────────────
+    def _change_server(self):
+        self._stop_all()
+        for proc in self.procs.values():
+            try: proc.terminate()
+            except Exception: pass
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+        self._change_server_requested = True
+        self.destroy()
 
     # ── Blank window ──────────────────────────────────────────────────────────
     def _open_blank_window(self):
@@ -2439,6 +2513,33 @@ class LoginScreen(tk.Tk):
 
 
 # ── Server selection screen ───────────────────────────────────────────────────
+PATCH_NOTES_URL = "https://mewpyyy.github.io/nebula-updates/patch_notes.json"
+SERVER_FILE     = os.path.join(os.path.expanduser("~"), ".ahkmanager_server.json")
+
+PATCH_NOTES = {
+    "1.4.6": [
+        "Version number now displayed next to the Nebula logo (e.g. Nebula v1.4.6)",
+        "App now remembers your last selected server — no need to pick every time",
+        "Added 'Change Server' button in the header to return to server selection",
+        "Script cards now show a live run time counter while a script is active",
+        "Update popup now includes patch notes so you can see what changed before updating",
+    ]
+}
+
+def load_last_server():
+    try:
+        with open(SERVER_FILE, "r") as f:
+            return json.load(f).get("server")
+    except Exception:
+        return None
+
+def save_last_server(server):
+    try:
+        with open(SERVER_FILE, "w") as f:
+            json.dump({"server": server}, f)
+    except Exception:
+        pass
+
 SERVER_SCRIPTS = {
     "Prison":   None,  # None = show all scripts
     "Skyblock": ["autoclicker7cps.ahk"],
@@ -2541,18 +2642,41 @@ if __name__ == "__main__":
                 break
             current_user = getattr(login, "_logged_user", "")
 
-        # Server selection
-        server_screen = ServerSelect()
-        server_screen.mainloop()
-        if not server_screen._selected:
+        # Check for remembered server
+        last_server = load_last_server()
+        if last_server and last_server in SERVER_SCRIPTS:
+            selected_server = last_server
+        else:
+            server_screen = ServerSelect()
+            server_screen.mainloop()
+            if not server_screen._selected:
+                break
+            selected_server = server_screen._selected
+            save_last_server(selected_server)
+
+        while True:
+            allowed_filenames = SERVER_SCRIPTS[selected_server]
+            app = AHKManager(current_user=current_user, server=selected_server, allowed_scripts=allowed_filenames)
+            app._logged_out = False
+            app._change_server_requested = False
+            app.mainloop()
+
+            if getattr(app, "_logged_out", False):
+                # Logged out — clear server memory and go back to login
+                save_last_server(None)
+                break
+
+            if getattr(app, "_change_server_requested", False):
+                # Show server select again
+                server_screen = ServerSelect()
+                server_screen.mainloop()
+                if not server_screen._selected:
+                    break
+                selected_server = server_screen._selected
+                save_last_server(selected_server)
+                continue
+
             break
-
-        selected_server   = server_screen._selected
-        allowed_filenames = SERVER_SCRIPTS[selected_server]  # None=all, []=none, [list]=filtered
-
-        app = AHKManager(current_user=current_user, server=selected_server, allowed_scripts=allowed_filenames)
-        app._logged_out = False
-        app.mainloop()
-        if getattr(app, "_logged_out", False):
+        else:
             continue
         break
