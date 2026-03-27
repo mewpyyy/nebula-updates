@@ -11,7 +11,7 @@ import urllib.request
 import urllib.error
 
 # ── Version & auto-update ─────────────────────────────────────────────────────
-CURRENT_VERSION = "1.8.1"
+CURRENT_VERSION = "1.8.2"
 # ▼▼ Replace these URLs with your actual web server paths ▼▼
 UPDATE_VERSION_URL = "https://mewpyyy.github.io/nebula-updates/version.json"
 UPDATE_SCRIPT_URL  = "https://mewpyyy.github.io/nebula-updates/ahk_manager.py"
@@ -1541,9 +1541,13 @@ class CaptchaSolver:
             dark_r   = dark   / total
             mid_r    = mid    / total
 
-            # Light mode only (standard Minecraft light grey UI):
-            # dark text on light grey bg → mid>0.40, bright>0.20
-            result = mid_r > 0.40 and bright_r > 0.20
+            # Detect captcha UI — supports both themes:
+            # Light mode: mid>0.40, bright>0.20 (grey bg, dark text)
+            # Dark mode / mixed: bright>0.15, dark<0.50 (dark bg, bright text)
+            # Friend's setup shows bright=0.229, dark=0.168, mid=0.002
+            light_mode = mid_r > 0.40 and bright_r > 0.20
+            dark_mode  = bright_r > 0.15 and dark_r < 0.50
+            result = light_mode or dark_mode
 
             self._debug(f"DETECT mc=({win_x},{win_y},{win_w}x{win_h}) "
                         f"strip=({strip_x},{strip_y},{strip_w}x{strip_h}) "
@@ -2996,7 +3000,7 @@ PATCH_NOTES_URL = "https://mewpyyy.github.io/nebula-updates/patch_notes.json"
 SERVER_FILE     = os.path.join(os.path.expanduser("~"), ".ahkmanager_server.json")
 
 PATCH_NOTES = {
-    "1.8.1": [
+    "1.8.2": [
         "Version number now displayed next to the Nebula logo (e.g. Nebula v1.4.6)",
         "App now remembers your last selected server — no need to pick every time",
         "Added 'Change Server' button in the header to return to server selection",
