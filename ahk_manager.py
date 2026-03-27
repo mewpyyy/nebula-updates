@@ -11,7 +11,7 @@ import urllib.request
 import urllib.error
 
 # ── Version & auto-update ─────────────────────────────────────────────────────
-CURRENT_VERSION = "1.7.7"
+CURRENT_VERSION = "1.8.1"
 # ▼▼ Replace these URLs with your actual web server paths ▼▼
 UPDATE_VERSION_URL = "https://mewpyyy.github.io/nebula-updates/version.json"
 UPDATE_SCRIPT_URL  = "https://mewpyyy.github.io/nebula-updates/ahk_manager.py"
@@ -1522,8 +1522,9 @@ class CaptchaSolver:
             ctypes.windll.user32.ReleaseDC(0, hdc_screen)
 
             total  = strip_w * strip_h
-            bright = 0
-            dark   = 0
+            bright = 0   # very bright pixels (>180 lum)
+            dark   = 0   # very dark pixels (<60 lum)
+            mid    = 0   # mid-grey pixels (100-180 lum) — light mode bg
             for px in buf:
                 r = (px >> 16) & 0xFF
                 g = (px >> 8)  & 0xFF
@@ -1533,18 +1534,20 @@ class CaptchaSolver:
                     bright += 1
                 elif lum < 60:
                     dark += 1
+                elif 100 <= lum <= 180:
+                    mid += 1
 
             bright_r = bright / total
             dark_r   = dark   / total
+            mid_r    = mid    / total
 
-            # Calibrated from debug logs:
-            # "Chest" title = ~0.156 bright, "Captcha" title = ~0.25-0.35 bright
-            # Lower bound set to catch both, upper bound prevents false positives
-            result = 0.10 < bright_r < 0.50 and dark_r > 0.50
+            # Light mode only (standard Minecraft light grey UI):
+            # dark text on light grey bg → mid>0.40, bright>0.20
+            result = mid_r > 0.40 and bright_r > 0.20
 
             self._debug(f"DETECT mc=({win_x},{win_y},{win_w}x{win_h}) "
                         f"strip=({strip_x},{strip_y},{strip_w}x{strip_h}) "
-                        f"bright={bright_r:.3f} dark={dark_r:.3f} result={result}")
+                        f"bright={bright_r:.3f} dark={dark_r:.3f} mid={mid_r:.3f} result={result}")
             return result
 
         except Exception as e:
@@ -1624,9 +1627,13 @@ class CaptchaSolver:
             # Step 10 — Glide to the correct answer slot and click
             tx, ty = self._get_slot_pos(slot)
             self._glide_mouse(tx, ty)
-            time.sleep(random.uniform(0.1, 0.2))
+            # Longer pause to let Minecraft register the hover before clicking
+            time.sleep(random.uniform(0.4, 0.6))
+            # Use SetCursorPos again to make absolutely sure cursor is on target
+            ctypes.windll.user32.SetCursorPos(tx, ty)
+            time.sleep(0.1)
             ctypes.windll.user32.mouse_event(0x0002, 0, 0, 0, 0)  # LEFT DOWN
-            time.sleep(random.uniform(0.05, 0.10))
+            time.sleep(random.uniform(0.08, 0.15))
             ctypes.windll.user32.mouse_event(0x0004, 0, 0, 0, 0)  # LEFT UP
 
             # Step 11 — Wait for chest to close then notify manager
@@ -1676,16 +1683,18 @@ class CaptchaSolver:
         if mc:
             win_x, win_y, win_w, win_h = mc
             cx           = win_x + win_w // 2
-            slot_y       = win_y + int(win_h * 0.445)
-            slot_spacing = int(win_w * 0.031)
+            # Slot y: item row is at ~43.5% down the window
+            slot_y       = win_y + int(win_h * 0.435)
+            # Slot spacing: ~51px at 1936px wide = 0.0263 ratio
+            slot_spacing = int(win_w * 0.0263)
             start_x      = cx - slot_spacing * 3
             return start_x + slot_index * slot_spacing, slot_y
         import ctypes
         sw = ctypes.windll.user32.GetSystemMetrics(0)
         sh = ctypes.windll.user32.GetSystemMetrics(1)
         cx           = sw // 2
-        slot_y       = int(sh * 0.445)
-        slot_spacing = int(sw * 0.031)
+        slot_y       = int(sh * 0.435)
+        slot_spacing = int(sw * 0.0263)
         start_x      = cx - slot_spacing * 3
         return start_x + slot_index * slot_spacing, slot_y
 
@@ -2987,7 +2996,7 @@ PATCH_NOTES_URL = "https://mewpyyy.github.io/nebula-updates/patch_notes.json"
 SERVER_FILE     = os.path.join(os.path.expanduser("~"), ".ahkmanager_server.json")
 
 PATCH_NOTES = {
-    "1.7.7": [
+    "1.8.1": [
         "Version number now displayed next to the Nebula logo (e.g. Nebula v1.4.6)",
         "App now remembers your last selected server — no need to pick every time",
         "Added 'Change Server' button in the header to return to server selection",
