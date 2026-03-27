@@ -11,7 +11,7 @@ import urllib.request
 import urllib.error
 
 # ── Version & auto-update ─────────────────────────────────────────────────────
-CURRENT_VERSION = "1.8.2"
+CURRENT_VERSION = "1.8.4"
 # ▼▼ Replace these URLs with your actual web server paths ▼▼
 UPDATE_VERSION_URL = "https://mewpyyy.github.io/nebula-updates/version.json"
 UPDATE_SCRIPT_URL  = "https://mewpyyy.github.io/nebula-updates/ahk_manager.py"
@@ -1676,11 +1676,11 @@ class CaptchaSolver:
         mc = self._get_mc_window_rect()
         if mc:
             win_x, win_y, win_w, win_h = mc
-            return win_x + win_w // 2, win_y + int(win_h * 0.338)
+            return win_x + win_w // 2, win_y + int(win_h * 0.355)
         import ctypes
         sw = ctypes.windll.user32.GetSystemMetrics(0)
         sh = ctypes.windll.user32.GetSystemMetrics(1)
-        return sw // 2, int(sh * 0.338)
+        return sw // 2, int(sh * 0.355)
 
     def _get_slot_pos(self, slot_index):
         mc = self._get_mc_window_rect()
@@ -1688,18 +1688,18 @@ class CaptchaSolver:
             win_x, win_y, win_w, win_h = mc
             cx           = win_x + win_w // 2
             # Slot y: item row is at ~43.5% down the window
-            slot_y       = win_y + int(win_h * 0.435)
+            slot_y       = win_y + int(win_h * 0.452)
             # Slot spacing: ~51px at 1936px wide = 0.0263 ratio
             slot_spacing = int(win_w * 0.0263)
-            start_x      = cx - slot_spacing * 3
+            start_x      = cx - slot_spacing * 2
             return start_x + slot_index * slot_spacing, slot_y
         import ctypes
         sw = ctypes.windll.user32.GetSystemMetrics(0)
         sh = ctypes.windll.user32.GetSystemMetrics(1)
         cx           = sw // 2
-        slot_y       = int(sh * 0.435)
+        slot_y       = int(sh * 0.452)
         slot_spacing = int(sw * 0.0263)
-        start_x      = cx - slot_spacing * 3
+        start_x      = cx - slot_spacing * 2
         return start_x + slot_index * slot_spacing, slot_y
 
     def _screenshot_captcha(self):
@@ -3000,7 +3000,7 @@ PATCH_NOTES_URL = "https://mewpyyy.github.io/nebula-updates/patch_notes.json"
 SERVER_FILE     = os.path.join(os.path.expanduser("~"), ".ahkmanager_server.json")
 
 PATCH_NOTES = {
-    "1.8.2": [
+    "1.8.4": [
         "Version number now displayed next to the Nebula logo (e.g. Nebula v1.4.6)",
         "App now remembers your last selected server — no need to pick every time",
         "Added 'Change Server' button in the header to return to server selection",
