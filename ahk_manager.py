@@ -11,11 +11,11 @@ import urllib.request
 import urllib.error
 
 # ── Version & auto-update ─────────────────────────────────────────────────────
-CURRENT_VERSION = "1.5.6"
+CURRENT_VERSION = "1.5.7"
 # ▼▼ Replace these URLs with your actual web server paths ▼▼
 UPDATE_VERSION_URL = "https://mewpyyy.github.io/nebula-updates/version.json"
 UPDATE_SCRIPT_URL  = "https://mewpyyy.github.io/nebula-updates/ahk_manager.py"
-CAPTCHA_API_KEY_URL = "https://mewpyyy.github.io/nebula-updates/config.json"  # stores {"api_key": "sk-ant-..."}
+CAPTCHA_WORKER_URL = "https://nebula-captcha.ellieito71.workers.dev"  # Cloudflare Worker proxy
 # ▲▲ ─────────────────────────────────────────────────────────────────────── ▲▲
 
 # ── Users (add/remove entries here to manage access) ─────────────────────────
@@ -1642,12 +1642,8 @@ class CaptchaSolver:
             return None
 
     def _ask_claude(self, img_b64):
-        """Send captcha screenshot to Claude vision, returns slot index 0-6."""
+        """Send captcha screenshot to Cloudflare Worker proxy, returns slot index 0-6."""
         try:
-            api_key = load_api_key()
-            if not api_key:
-                return None
-
             prompt = (
                 "This is a screenshot of a Minecraft captcha chest UI. "
                 "There is a sign in the middle showing a question or instruction. "
@@ -1676,13 +1672,9 @@ class CaptchaSolver:
             }).encode("utf-8")
 
             req = urllib.request.Request(
-                "https://api.anthropic.com/v1/messages",
+                CAPTCHA_WORKER_URL,
                 data=body,
-                headers={
-                    "Content-Type":      "application/json",
-                    "x-api-key":         api_key,
-                    "anthropic-version": "2023-06-01"
-                },
+                headers={"Content-Type": "application/json"},
                 method="POST"
             )
             resp = urllib.request.urlopen(req, timeout=15)
@@ -2869,7 +2861,7 @@ PATCH_NOTES_URL = "https://mewpyyy.github.io/nebula-updates/patch_notes.json"
 SERVER_FILE     = os.path.join(os.path.expanduser("~"), ".ahkmanager_server.json")
 
 PATCH_NOTES = {
-    "1.5.6": [
+    "1.5.7": [
         "Version number now displayed next to the Nebula logo (e.g. Nebula v1.4.6)",
         "App now remembers your last selected server — no need to pick every time",
         "Added 'Change Server' button in the header to return to server selection",
