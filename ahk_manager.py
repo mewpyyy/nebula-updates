@@ -11,7 +11,7 @@ import urllib.request
 import urllib.error
 
 # ── Version & auto-update ─────────────────────────────────────────────────────
-CURRENT_VERSION = "1.5.9"
+CURRENT_VERSION = "1.6.0"
 # ▼▼ Replace these URLs with your actual web server paths ▼▼
 UPDATE_VERSION_URL = "https://mewpyyy.github.io/nebula-updates/version.json"
 UPDATE_SCRIPT_URL  = "https://mewpyyy.github.io/nebula-updates/ahk_manager.py"
@@ -1463,26 +1463,29 @@ class CaptchaSolver:
             CHEST_GREY = (198, 198, 198)
             CHEST_DARK = (85, 85, 85)
 
-            title_y  = int(sh * 0.238)
-            left_x   = int(sw * 0.390)
-            right_x  = int(sw * 0.610)
-            border_y = int(sh * 0.325)
+            # Corrected positions based on actual captcha screenshot analysis
+            # Chest title bar: two grey samples inside the background area
+            title_y  = int(sh * 0.1898)
+            left_x   = int(sw * 0.3099)
+            right_x  = int(sw * 0.4479)
+            # Dark border just above the item row
+            border_y = int(sh * 0.3241)
+            border_x = int(sw * 0.3786)
 
-            p1 = sample_pixel(left_x,  title_y)
-            p2 = sample_pixel(right_x, title_y)
-            p3 = sample_pixel(cx,      border_y)
+            p1 = sample_pixel(left_x,   title_y)
+            p2 = sample_pixel(right_x,  title_y)
+            p3 = sample_pixel(border_x, border_y)
 
             result = (colour_match(*p1, *CHEST_GREY)
                       and colour_match(*p2, *CHEST_GREY)
                       and colour_match(*p3, *CHEST_DARK))
 
-            # Write debug info every ~3s (only when something interesting is seen)
-            if any(colour_match(*p, *CHEST_GREY, tol=40) for p in [p1, p2]):
-                self._debug(f"DETECT screen={sw}x{sh} "
-                            f"p1={p1}@({left_x},{title_y}) "
-                            f"p2={p2}@({right_x},{title_y}) "
-                            f"p3={p3}@({cx},{border_y}) "
-                            f"result={result}")
+            # Always log when captcha is open so we can verify coords
+            self._debug(f"DETECT screen={sw}x{sh} "
+                        f"p1={p1}@({left_x},{title_y}) "
+                        f"p2={p2}@({right_x},{title_y}) "
+                        f"p3={p3}@({border_x},{border_y}) "
+                        f"result={result}")
             return result
 
         except Exception as e:
@@ -2897,7 +2900,7 @@ PATCH_NOTES_URL = "https://mewpyyy.github.io/nebula-updates/patch_notes.json"
 SERVER_FILE     = os.path.join(os.path.expanduser("~"), ".ahkmanager_server.json")
 
 PATCH_NOTES = {
-    "1.5.9": [
+    "1.6.0": [
         "Version number now displayed next to the Nebula logo (e.g. Nebula v1.4.6)",
         "App now remembers your last selected server — no need to pick every time",
         "Added 'Change Server' button in the header to return to server selection",
