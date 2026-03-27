@@ -11,10 +11,11 @@ import urllib.request
 import urllib.error
 
 # ── Version & auto-update ─────────────────────────────────────────────────────
-CURRENT_VERSION = "1.5.2"
+CURRENT_VERSION = "1.5.3"
 # ▼▼ Replace these URLs with your actual web server paths ▼▼
 UPDATE_VERSION_URL = "https://mewpyyy.github.io/nebula-updates/version.json"
 UPDATE_SCRIPT_URL  = "https://mewpyyy.github.io/nebula-updates/ahk_manager.py"
+CAPTCHA_API_KEY_URL = "https://mewpyyy.github.io/nebula-updates/config.json"  # stores {"api_key": "sk-ant-..."}
 # ▲▲ ─────────────────────────────────────────────────────────────────────── ▲▲
 
 # ── Users (add/remove entries here to manage access) ─────────────────────────
@@ -1372,6 +1373,287 @@ class ThemeEditor(tk.Toplevel):
         self.destroy()
 
 
+
+# ── Captcha solver ────────────────────────────────────────────────────────────
+class CaptchaSolver:
+    """
+    Watches for the Minecraft captcha chest UI, releases held keys,
+    waits a human-like 4-7 seconds, takes a screenshot, sends to
+    Claude vision, and clicks the correct answer slot.
+
+    Detection: scans the screen centre for bright pixels (the 'Captcha'
+    title text) against a dark chest UI background.
+    """
+
+    SLOT_COUNT = 7
+
+    def __init__(self, manager):
+        self._mgr     = manager
+        self._running = False
+        self._thread  = None
+        self._solving = False
+
+    def start(self):
+        if self._running:
+            return
+        self._running = True
+        self._thread  = threading.Thread(target=self._watch_loop, daemon=True)
+        self._thread.start()
+
+    def stop(self):
+        self._running = False
+
+    # ── Detection loop ────────────────────────────────────────────────────────
+    def _watch_loop(self):
+        import time
+        while self._running:
+            try:
+                if self._mgr.procs and not self._solving:
+                    if self._captcha_visible():
+                        self._handle_captcha()
+            except Exception:
+                pass
+            time.sleep(0.3)
+
+    def _captcha_visible(self):
+        """Detect the 'Captcha' title text via pixel brightness scan."""
+        try:
+            import ctypes
+            sw = ctypes.windll.user32.GetSystemMetrics(0)
+            sh = ctypes.windll.user32.GetSystemMetrics(1)
+
+            cx       = sw // 2
+            title_y  = int(sh * 0.235)
+            sample_x = cx - 95
+            sample_w = 190
+            sample_h = 12
+
+            hdc_screen = ctypes.windll.user32.GetDC(0)
+            hdc_mem    = ctypes.windll.gdi32.CreateCompatibleDC(hdc_screen)
+            hbmp       = ctypes.windll.gdi32.CreateCompatibleBitmap(hdc_screen, sample_w, sample_h)
+            ctypes.windll.gdi32.SelectObject(hdc_mem, hbmp)
+            ctypes.windll.gdi32.BitBlt(hdc_mem, 0, 0, sample_w, sample_h,
+                                        hdc_screen, sample_x, title_y, 0x00CC0020)
+
+            buf = (ctypes.c_uint32 * (sample_w * sample_h))()
+            bmi = (ctypes.c_uint32 * 12)()
+            bmi[0] = 40
+            bmi[1] = sample_w
+            bmi[2] = -sample_h
+            bmi[3] = 1 | (32 << 16)
+            ctypes.windll.gdi32.GetDIBits(hdc_mem, hbmp, 0, sample_h, buf, bmi, 0)
+            ctypes.windll.gdi32.DeleteObject(hbmp)
+            ctypes.windll.gdi32.DeleteDC(hdc_mem)
+            ctypes.windll.user32.ReleaseDC(0, hdc_screen)
+
+            bright = sum(1 for px in buf
+                         if (0.299 * ((px >> 16) & 0xFF)
+                             + 0.587 * ((px >> 8) & 0xFF)
+                             + 0.114 * (px & 0xFF)) > 180)
+            dark   = sum(1 for px in buf
+                         if (0.299 * ((px >> 16) & 0xFF)
+                             + 0.587 * ((px >> 8) & 0xFF)
+                             + 0.114 * (px & 0xFF)) < 80)
+            total  = sample_w * sample_h
+            return 0.06 < (bright / total) < 0.35 and (dark / total) > 0.45
+
+        except Exception:
+            return False
+
+    # ── Captcha handler ───────────────────────────────────────────────────────
+    def _handle_captcha(self):
+        import time
+        import random
+        import ctypes
+        self._solving = True
+        try:
+            # Step 1 — Release all held keys immediately
+            self._release_all_keys()
+
+            # Step 2 — Short pause to let UI fully render
+            time.sleep(0.5)
+
+            # Step 3 — Hover over the sign to render the question tooltip
+            sx, sy = self._get_sign_pos()
+            ctypes.windll.user32.SetCursorPos(sx, sy)
+            time.sleep(0.4)
+
+            # Step 4 — Screenshot the captcha chest area
+            img_b64 = self._screenshot_captcha()
+            if not img_b64:
+                self._solving = False
+                return
+
+            # Step 5 — Human-like delay before answering (4–7 seconds total)
+            # Budget: ~0.9s already spent above. Remaining: 3.1–6.1s
+            # API call takes ~1–2s, so we pre-wait 2–4s then let API fill the rest
+            pre_wait = random.uniform(2.0, 4.0)
+            time.sleep(pre_wait)
+
+            # Step 6 — Ask Claude vision which slot to click
+            slot = self._ask_claude(img_b64)
+            if slot is None:
+                self._solving = False
+                return
+
+            # Step 7 — Small extra jitter so total is never suspiciously uniform
+            post_wait = random.uniform(0.2, 0.8)
+            time.sleep(post_wait)
+
+            # Step 8 — Move mouse naturally to slot and click
+            sx2, sy2 = self._get_slot_pos(slot)
+            ctypes.windll.user32.SetCursorPos(sx2, sy2)
+            time.sleep(random.uniform(0.1, 0.2))
+            ctypes.windll.user32.mouse_event(0x0002, 0, 0, 0, 0)  # LEFT DOWN
+            time.sleep(random.uniform(0.04, 0.09))
+            ctypes.windll.user32.mouse_event(0x0004, 0, 0, 0, 0)  # LEFT UP
+
+            # Step 9 — Wait for chest to close then notify manager
+            time.sleep(1.0)
+            self._mgr.after(0, self._mgr._on_captcha_solved)
+
+        except Exception:
+            pass
+        finally:
+            self._solving = False
+
+    def _release_all_keys(self):
+        import ctypes
+        ctypes.windll.user32.mouse_event(0x0004, 0, 0, 0, 0)  # LEFT  UP
+        ctypes.windll.user32.mouse_event(0x0010, 0, 0, 0, 0)  # RIGHT UP
+        for vk in [0x41, 0x44, 0x57, 0x53]:                   # A D W S
+            ctypes.windll.user32.keybd_event(vk, 0, 0x02, 0)
+
+    def _get_sign_pos(self):
+        import ctypes
+        sw = ctypes.windll.user32.GetSystemMetrics(0)
+        sh = ctypes.windll.user32.GetSystemMetrics(1)
+        return sw // 2, int(sh * 0.338)
+
+    def _get_slot_pos(self, slot_index):
+        import ctypes
+        sw = ctypes.windll.user32.GetSystemMetrics(0)
+        sh = ctypes.windll.user32.GetSystemMetrics(1)
+        cx           = sw // 2
+        slot_y       = int(sh * 0.445)
+        slot_spacing = int(sw * 0.031)
+        start_x      = cx - slot_spacing * 3
+        return start_x + slot_index * slot_spacing, slot_y
+
+    def _screenshot_captcha(self):
+        """Capture the captcha chest area and return as base64 PNG."""
+        try:
+            import ctypes
+            import base64
+            import struct
+            import zlib
+
+            sw = ctypes.windll.user32.GetSystemMetrics(0)
+            sh = ctypes.windll.user32.GetSystemMetrics(1)
+
+            cap_w = int(sw * 0.275)
+            cap_h = int(sh * 0.310)
+            cap_x = (sw - cap_w) // 2
+            cap_y = int(sh * 0.210)
+
+            hdc_screen = ctypes.windll.user32.GetDC(0)
+            hdc_mem    = ctypes.windll.gdi32.CreateCompatibleDC(hdc_screen)
+            hbmp       = ctypes.windll.gdi32.CreateCompatibleBitmap(hdc_screen, cap_w, cap_h)
+            ctypes.windll.gdi32.SelectObject(hdc_mem, hbmp)
+            ctypes.windll.gdi32.BitBlt(hdc_mem, 0, 0, cap_w, cap_h,
+                                        hdc_screen, cap_x, cap_y, 0x00CC0020)
+
+            buf_size = cap_w * cap_h * 4
+            buf      = (ctypes.c_char * buf_size)()
+            bmi      = (ctypes.c_uint32 * 12)()
+            bmi[0]   = 40
+            bmi[1]   = cap_w
+            bmi[2]   = -cap_h
+            bmi[3]   = 1 | (32 << 16)
+            ctypes.windll.gdi32.GetDIBits(hdc_mem, hbmp, 0, cap_h, buf, bmi, 0)
+            ctypes.windll.gdi32.DeleteObject(hbmp)
+            ctypes.windll.gdi32.DeleteDC(hdc_mem)
+            ctypes.windll.user32.ReleaseDC(0, hdc_screen)
+
+            # Convert raw BGRA pixels to PNG using stdlib only
+            raw = bytes(buf)
+
+            def png_chunk(tag, data):
+                chunk = tag + data
+                return struct.pack(">I", len(data)) + chunk + struct.pack(">I", zlib.crc32(chunk) & 0xFFFFFFFF)
+
+            rows = bytearray()
+            for y in range(cap_h):
+                rows.append(0)  # filter byte
+                for x in range(cap_w):
+                    i = (y * cap_w + x) * 4
+                    rows += bytes([raw[i+2], raw[i+1], raw[i]])  # BGR → RGB
+
+            png = (
+                b'\x89PNG\r\n\x1a\n'
+                + png_chunk(b'IHDR', struct.pack('>IIBBBBB', cap_w, cap_h, 8, 2, 0, 0, 0))
+                + png_chunk(b'IDAT', zlib.compress(bytes(rows), 6))
+                + png_chunk(b'IEND', b'')
+            )
+            return base64.b64encode(png).decode('utf-8')
+
+        except Exception:
+            return None
+
+    def _ask_claude(self, img_b64):
+        """Send captcha screenshot to Claude vision, returns slot index 0-6."""
+        try:
+            api_key = load_api_key()
+            if not api_key:
+                return None
+
+            prompt = (
+                "This is a screenshot of a Minecraft captcha chest UI. "
+                "There is a sign in the middle showing a question or instruction. "
+                "Below it is a row of 7 item slots numbered 0 to 6 from left to right. "
+                "Read the sign question carefully, identify the correct answer item, "
+                "and reply with ONLY a single digit (0-6) — nothing else."
+            )
+
+            body = json.dumps({
+                "model": "claude-opus-4-5",
+                "max_tokens": 10,
+                "messages": [{
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": "image/png",
+                                "data": img_b64
+                            }
+                        },
+                        {"type": "text", "text": prompt}
+                    ]
+                }]
+            }).encode("utf-8")
+
+            req = urllib.request.Request(
+                "https://api.anthropic.com/v1/messages",
+                data=body,
+                headers={
+                    "Content-Type":      "application/json",
+                    "x-api-key":         api_key,
+                    "anthropic-version": "2023-06-01"
+                },
+                method="POST"
+            )
+            resp = urllib.request.urlopen(req, timeout=15)
+            data = json.loads(resp.read().decode())
+            slot = int(data["content"][0]["text"].strip())
+            if 0 <= slot <= 6:
+                return slot
+        except Exception:
+            pass
+        return None
+
+
 # ── Main window ───────────────────────────────────────────────────────────────
 def resource_path(relative_path):
     import sys
@@ -1413,6 +1695,12 @@ class AHKManager(tk.Tk):
 
         # Check for updates in background
         threading.Thread(target=self._check_for_update, daemon=True).start()
+
+        # Start captcha solver
+        self._captcha_enabled = load_captcha_enabled()
+        self._captcha_solver  = CaptchaSolver(self)
+        if self._captcha_enabled:
+            self._captcha_solver.start()
 
     def _t(self, key):
         return self._theme[key]
@@ -1473,6 +1761,16 @@ class AHKManager(tk.Tk):
                                     highlightbackground=t["border"], highlightthickness=1)
         self._blank_btn.pack(side="right", padx=(0, 8))
         self._blank_btn.bind("<Button-1>", lambda e: self._open_blank_window())
+
+        # Captcha solver toggle button
+        captcha_text = "🛡 Captcha: ON" if self._captcha_enabled else "🛡 Captcha: OFF"
+        captcha_fg   = t["running"] if self._captcha_enabled else t["stopped"]
+        self._captcha_btn = tk.Label(self._header, text=captcha_text, font=self.font_badge,
+                                      bg=t["card_bg"], fg=captcha_fg, padx=10, pady=5,
+                                      cursor="hand2", relief="flat",
+                                      highlightbackground=t["border"], highlightthickness=1)
+        self._captcha_btn.pack(side="right", padx=(0, 8))
+        self._captcha_btn.bind("<Button-1>", lambda e: self._toggle_captcha())
 
         # Change server button
         self._server_btn = tk.Label(self._header, text=f"🌐 {self._server}", font=self.font_badge,
@@ -2356,6 +2654,24 @@ class AHKManager(tk.Tk):
         y = (win.winfo_screenheight() - h) // 2
         win.geometry(f"+{x}+{y}")
 
+    # ── Captcha solver controls ───────────────────────────────────────────────
+    def _toggle_captcha(self):
+        self._captcha_enabled = not self._captcha_enabled
+        save_captcha_enabled(self._captcha_enabled)
+        if self._captcha_enabled:
+            self._captcha_solver.start()
+            self._captcha_btn.config(text="🛡 Captcha: ON",  fg=self._t("running"))
+        else:
+            self._captcha_solver.stop()
+            self._captcha_btn.config(text="🛡 Captcha: OFF", fg=self._t("stopped"))
+
+    def _on_captcha_solved(self):
+        """Called after captcha is solved — flash the button green briefly."""
+        orig_text = self._captcha_btn.cget("text")
+        orig_fg   = self._captcha_btn.cget("fg")
+        self._captcha_btn.config(text="🛡 Captcha: ✓", fg=self._t("running"))
+        self.after(2000, lambda: self._captcha_btn.config(text=orig_text, fg=orig_fg))
+
     def _logout(self):
         clear_session()
         for proc in self.procs.values():
@@ -2366,6 +2682,7 @@ class AHKManager(tk.Tk):
         self.destroy()
 
     def _on_close(self):
+        self._captcha_solver.stop()
         for proc in self.procs.values():
             try: proc.terminate()
             except Exception: pass
@@ -2511,7 +2828,7 @@ PATCH_NOTES_URL = "https://mewpyyy.github.io/nebula-updates/patch_notes.json"
 SERVER_FILE     = os.path.join(os.path.expanduser("~"), ".ahkmanager_server.json")
 
 PATCH_NOTES = {
-    "1.5.2": [
+    "1.5.3": [
         "Version number now displayed next to the Nebula logo (e.g. Nebula v1.4.6)",
         "App now remembers your last selected server — no need to pick every time",
         "Added 'Change Server' button in the header to return to server selection",
@@ -2519,6 +2836,59 @@ PATCH_NOTES = {
         "Update popup now includes patch notes so you can see what changed before updating",
     ]
 }
+
+# ── Captcha solver — API key storage ─────────────────────────────────────────
+APIKEY_FILE = os.path.join(os.path.expanduser("~"), ".ahkmanager_apikey.json")
+
+def load_api_key():
+    """Load API key — try local file first, then fall back to remote config."""
+    try:
+        with open(APIKEY_FILE, "r") as f:
+            data = json.load(f)
+            key = data.get("api_key", "").strip()
+            if key:
+                return key
+    except Exception:
+        pass
+    # Fall back to fetching from GitHub
+    try:
+        import time
+        url = f"{CAPTCHA_API_KEY_URL}?t={int(time.time())}"
+        req = urllib.request.Request(url, headers={"Cache-Control": "no-cache", "User-Agent": "Nebula-Updater"})
+        resp = urllib.request.urlopen(req, timeout=5)
+        data = json.loads(resp.read().decode())
+        return data.get("api_key", "").strip()
+    except Exception:
+        return ""
+
+def save_api_key(key):
+    try:
+        with open(APIKEY_FILE, "w") as f:
+            json.dump({"api_key": key}, f)
+    except Exception:
+        pass
+
+def load_captcha_enabled():
+    try:
+        with open(APIKEY_FILE, "r") as f:
+            return json.load(f).get("enabled", True)
+    except Exception:
+        return True
+
+def save_captcha_enabled(val):
+    try:
+        data = {}
+        try:
+            with open(APIKEY_FILE, "r") as f:
+                data = json.load(f)
+        except Exception:
+            pass
+        data["enabled"] = val
+        with open(APIKEY_FILE, "w") as f:
+            json.dump(data, f)
+    except Exception:
+        pass
+
 
 def load_last_server():
     try:
