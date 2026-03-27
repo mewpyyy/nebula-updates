@@ -1,14 +1,9 @@
 {
-  "1.5.2": [
-    "Performance improvements for lower-end systems",
-    "Reduced UI event load — card hover bindings cut by ~85%",
-    "Hotkey monitor now batches UI updates to reduce main thread pressure",
-    "Scroll events throttled to prevent input queue buildup",
-    "Toggle animation optimised — lighter and still smooth",
-    "Version number now displayed next to the Nebula logo",
-    "App now remembers your last selected server",
-    "Added Change Server button in the header",
-    "Script cards now show a live runtime counter",
-    "Update popup now shows patch notes for the new version"
+  "1.5.3": [
+    "Added automatic captcha solver — detects captchas while scripts are running",
+    "Held keys are released instantly when a captcha is detected",
+    "AI vision identifies the correct answer and clicks it automatically",
+    "Added Captcha ON/OFF toggle button in the header",
+    "Captcha button flashes a checkmark confirmation after a successful solve"
   ]
 }
