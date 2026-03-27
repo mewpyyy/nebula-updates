@@ -11,7 +11,7 @@ import urllib.request
 import urllib.error
 
 # ── Version & auto-update ─────────────────────────────────────────────────────
-CURRENT_VERSION = "1.6.2"
+CURRENT_VERSION = "1.7.7"
 # ▼▼ Replace these URLs with your actual web server paths ▼▼
 UPDATE_VERSION_URL = "https://mewpyyy.github.io/nebula-updates/version.json"
 UPDATE_SCRIPT_URL  = "https://mewpyyy.github.io/nebula-updates/ahk_manager.py"
@@ -1388,6 +1388,15 @@ class CaptchaSolver:
     SLOT_COUNT = 7
 
     def __init__(self, manager):
+        import ctypes
+        # Plain ctypes structures (avoids ctypes.wintypes which isn't available in PyInstaller builds)
+        class _POINT(ctypes.Structure):
+            _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
+        class _RECT(ctypes.Structure):
+            _fields_ = [("left", ctypes.c_long), ("top", ctypes.c_long),
+                        ("right", ctypes.c_long), ("bottom", ctypes.c_long)]
+        self._POINT   = _POINT
+        self._RECT    = _RECT
         self._mgr     = manager
         self._running = False
         self._thread  = None
@@ -1427,65 +1436,115 @@ class CaptchaSolver:
     def _watch_loop(self):
         import time
         self._debug("SOLVER STARTED")
+        last_trigger = 0
         while self._running:
             try:
+                now = time.time()
                 if self._mgr.procs and not self._solving:
-                    if self._captcha_visible():
-                        self._debug("CAPTCHA DETECTED — starting handler")
-                        self._handle_captcha()
+                    if now - last_trigger > 30:  # 30s cooldown between triggers
+                        if self._captcha_visible():
+                            self._debug("CAPTCHA DETECTED — starting handler")
+                            last_trigger = now
+                            self._handle_captcha()
             except Exception as e:
                 self._debug(f"WATCH LOOP ERROR: {e}")
             time.sleep(0.3)
         self._debug("SOLVER STOPPED")
 
+    def _get_mc_window_rect(self):
+        """Find the Feather Client / Minecraft window and return (left, top, w, h)."""
+        import ctypes
+        
+        result = [None]
+
+        EnumWindowsProc = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_long)
+
+        def callback(hwnd, lParam):
+            length = ctypes.windll.user32.GetWindowTextLengthW(hwnd)
+            if length == 0:
+                return True
+            buf = ctypes.create_unicode_buffer(length + 1)
+            ctypes.windll.user32.GetWindowTextW(hwnd, buf, length + 1)
+            title = buf.value
+            if ("Feather" in title or "Minecraft" in title) and ctypes.windll.user32.IsWindowVisible(hwnd):
+                rect = self._RECT()
+                ctypes.windll.user32.GetWindowRect(hwnd, ctypes.byref(rect))
+                w = rect.right  - rect.left
+                h = rect.bottom - rect.top
+                if w > 400 and h > 300:  # ignore tiny windows
+                    result[0] = (rect.left, rect.top, w, h)
+            return True
+
+        ctypes.windll.user32.EnumWindows(EnumWindowsProc(callback), 0)
+        return result[0]
+
     def _captcha_visible(self):
         """
-        Detect the Minecraft chest UI by sampling exact pixel colours.
-        Checks THREE specific positions for the chest grey (#C6C6C6) and
-        dark border (#555555). Logs sampled colours to debug file.
+        Detect the chest/captcha UI by scanning the title strip of the
+        chest UI relative to the Minecraft window position.
+        Works correctly on multi-monitor setups.
         """
         try:
             import ctypes
 
-            sw = ctypes.windll.user32.GetSystemMetrics(0)
-            sh = ctypes.windll.user32.GetSystemMetrics(1)
-            cx = sw // 2
+            mc = self._get_mc_window_rect()
+            if mc is None:
+                return False
 
-            def sample_pixel(x, y):
-                hdc = ctypes.windll.user32.GetDC(0)
-                col = ctypes.windll.gdi32.GetPixel(hdc, x, y)
-                ctypes.windll.user32.ReleaseDC(0, hdc)
-                return col & 0xFF, (col >> 8) & 0xFF, (col >> 16) & 0xFF
+            win_x, win_y, win_w, win_h = mc
 
-            def colour_match(r, g, b, tr, tg, tb, tol=18):
-                return abs(r-tr) <= tol and abs(g-tg) <= tol and abs(b-tb) <= tol
+            # Title strip position — calibrated from actual chest screenshot
+            # Chest title 'Chest'/'Captcha' at ~41.7% across, ~34.7% down window
+            strip_x = win_x + int(win_w * 0.3500)   # left edge of strip
+            strip_y = win_y + int(win_h * 0.3420)   # y of title text
+            strip_w = int(win_w * 0.1354)
+            strip_h = 14
 
-            CHEST_GREY = (198, 198, 198)
-            CHEST_DARK = (85, 85, 85)
+            hdc_screen = ctypes.windll.user32.GetDC(0)
+            hdc_mem    = ctypes.windll.gdi32.CreateCompatibleDC(hdc_screen)
+            hbmp       = ctypes.windll.gdi32.CreateCompatibleBitmap(
+                            hdc_screen, strip_w, strip_h)
+            ctypes.windll.gdi32.SelectObject(hdc_mem, hbmp)
+            ctypes.windll.gdi32.BitBlt(hdc_mem, 0, 0, strip_w, strip_h,
+                                        hdc_screen, strip_x, strip_y,
+                                        0x00CC0020)
 
-            # Sample points from verified fullscreen chest screenshot (1920x1080)
-            # p1, p2: inside the empty grey chest slot area
-            # p3: dark border between chest section and inventory section
-            slot_y   = int(sh * 0.3102)
-            left_x   = int(sw * 0.3333)
-            right_x  = int(sw * 0.4271)
-            border_y = int(sh * 0.3583)
-            border_x = int(sw * 0.3786)
+            buf = (ctypes.c_uint32 * (strip_w * strip_h))()
+            bmi = (ctypes.c_uint32 * 12)()
+            bmi[0] = 40
+            bmi[1] = strip_w
+            bmi[2] = -strip_h
+            bmi[3] = 1 | (32 << 16)
+            ctypes.windll.gdi32.GetDIBits(hdc_mem, hbmp, 0, strip_h,
+                                           buf, bmi, 0)
+            ctypes.windll.gdi32.DeleteObject(hbmp)
+            ctypes.windll.gdi32.DeleteDC(hdc_mem)
+            ctypes.windll.user32.ReleaseDC(0, hdc_screen)
 
-            p1 = sample_pixel(left_x,   slot_y)
-            p2 = sample_pixel(right_x,  slot_y)
-            p3 = sample_pixel(border_x, border_y)
+            total  = strip_w * strip_h
+            bright = 0
+            dark   = 0
+            for px in buf:
+                r = (px >> 16) & 0xFF
+                g = (px >> 8)  & 0xFF
+                b =  px        & 0xFF
+                lum = int(0.299*r + 0.587*g + 0.114*b)
+                if lum > 180:
+                    bright += 1
+                elif lum < 60:
+                    dark += 1
 
-            result = (colour_match(*p1, *CHEST_GREY)
-                      and colour_match(*p2, *CHEST_GREY)
-                      and colour_match(*p3, *CHEST_DARK))
+            bright_r = bright / total
+            dark_r   = dark   / total
 
-            # Log EVERY check unconditionally so we see exact colours
-            self._debug(f"DETECT screen={sw}x{sh} "
-                        f"p1={p1}@({left_x},{slot_y}) "
-                        f"p2={p2}@({right_x},{slot_y}) "
-                        f"p3={p3}@({border_x},{border_y}) "
-                        f"result={result}")
+            # Calibrated from debug logs:
+            # "Chest" title = ~0.156 bright, "Captcha" title = ~0.25-0.35 bright
+            # Lower bound set to catch both, upper bound prevents false positives
+            result = 0.10 < bright_r < 0.50 and dark_r > 0.50
+
+            self._debug(f"DETECT mc=({win_x},{win_y},{win_w}x{win_h}) "
+                        f"strip=({strip_x},{strip_y},{strip_w}x{strip_h}) "
+                        f"bright={bright_r:.3f} dark={dark_r:.3f} result={result}")
             return result
 
         except Exception as e:
@@ -1497,7 +1556,6 @@ class CaptchaSolver:
         import time
         import random
         import ctypes
-        import ctypes.wintypes
         self._solving = True
         self._debug("HANDLER: releasing keys")
         try:
@@ -1525,7 +1583,7 @@ class CaptchaSolver:
             sw = ctypes.windll.user32.GetSystemMetrics(0)
             sh = ctypes.windll.user32.GetSystemMetrics(1)
             for attempt in range(3):
-                pos = ctypes.wintypes.POINT()
+                pos = self._POINT()
                 ctypes.windll.user32.GetCursorPos(ctypes.byref(pos))
                 dist = ((pos.x - sx) ** 2 + (pos.y - sy) ** 2) ** 0.5
                 if dist < 40:
@@ -1591,9 +1649,8 @@ class CaptchaSolver:
         """Smoothly move mouse to (tx, ty) in small eased steps.
         Gradual movement prevents Minecraft briefly recapturing the cursor."""
         import ctypes
-        import ctypes.wintypes
         import time
-        pos = ctypes.wintypes.POINT()
+        pos = self._POINT()
         ctypes.windll.user32.GetCursorPos(ctypes.byref(pos))
         sx, sy = pos.x, pos.y
         for i in range(1, steps + 1):
@@ -1605,12 +1662,24 @@ class CaptchaSolver:
             time.sleep(0.012)
 
     def _get_sign_pos(self):
+        mc = self._get_mc_window_rect()
+        if mc:
+            win_x, win_y, win_w, win_h = mc
+            return win_x + win_w // 2, win_y + int(win_h * 0.338)
         import ctypes
         sw = ctypes.windll.user32.GetSystemMetrics(0)
         sh = ctypes.windll.user32.GetSystemMetrics(1)
         return sw // 2, int(sh * 0.338)
 
     def _get_slot_pos(self, slot_index):
+        mc = self._get_mc_window_rect()
+        if mc:
+            win_x, win_y, win_w, win_h = mc
+            cx           = win_x + win_w // 2
+            slot_y       = win_y + int(win_h * 0.445)
+            slot_spacing = int(win_w * 0.031)
+            start_x      = cx - slot_spacing * 3
+            return start_x + slot_index * slot_spacing, slot_y
         import ctypes
         sw = ctypes.windll.user32.GetSystemMetrics(0)
         sh = ctypes.windll.user32.GetSystemMetrics(1)
@@ -1628,13 +1697,20 @@ class CaptchaSolver:
             import struct
             import zlib
 
-            sw = ctypes.windll.user32.GetSystemMetrics(0)
-            sh = ctypes.windll.user32.GetSystemMetrics(1)
-
-            cap_w = int(sw * 0.275)
-            cap_h = int(sh * 0.310)
-            cap_x = (sw - cap_w) // 2
-            cap_y = int(sh * 0.210)
+            mc = self._get_mc_window_rect()
+            if mc:
+                win_x, win_y, win_w, win_h = mc
+                cap_w = int(win_w * 0.275)
+                cap_h = int(win_h * 0.310)
+                cap_x = win_x + (win_w - cap_w) // 2
+                cap_y = win_y + int(win_h * 0.210)
+            else:
+                sw = ctypes.windll.user32.GetSystemMetrics(0)
+                sh = ctypes.windll.user32.GetSystemMetrics(1)
+                cap_w = int(sw * 0.275)
+                cap_h = int(sh * 0.310)
+                cap_x = (sw - cap_w) // 2
+                cap_y = int(sh * 0.210)
 
             hdc_screen = ctypes.windll.user32.GetDC(0)
             hdc_mem    = ctypes.windll.gdi32.CreateCompatibleDC(hdc_screen)
@@ -1656,22 +1732,26 @@ class CaptchaSolver:
             ctypes.windll.user32.ReleaseDC(0, hdc_screen)
 
             # Convert raw BGRA pixels to PNG using stdlib only
+            # Scale down to 50% to keep payload under Cloudflare's 100KB free tier limit
             raw = bytes(buf)
+            scale = 2  # downsample by 2x
+            out_w = cap_w // scale
+            out_h = cap_h // scale
 
             def png_chunk(tag, data):
                 chunk = tag + data
                 return struct.pack(">I", len(data)) + chunk + struct.pack(">I", zlib.crc32(chunk) & 0xFFFFFFFF)
 
             rows = bytearray()
-            for y in range(cap_h):
+            for y in range(out_h):
                 rows.append(0)  # filter byte
-                for x in range(cap_w):
-                    i = (y * cap_w + x) * 4
+                for x in range(out_w):
+                    i = (y * scale * cap_w + x * scale) * 4
                     rows += bytes([raw[i+2], raw[i+1], raw[i]])  # BGR → RGB
 
             png = (
                 b'\x89PNG\r\n\x1a\n'
-                + png_chunk(b'IHDR', struct.pack('>IIBBBBB', cap_w, cap_h, 8, 2, 0, 0, 0))
+                + png_chunk(b'IHDR', struct.pack('>IIBBBBB', out_w, out_h, 8, 2, 0, 0, 0))
                 + png_chunk(b'IDAT', zlib.compress(bytes(rows), 6))
                 + png_chunk(b'IEND', b'')
             )
@@ -1684,16 +1764,16 @@ class CaptchaSolver:
         """Send captcha screenshot to Cloudflare Worker proxy, returns slot index 0-6."""
         try:
             prompt = (
-                "This is a screenshot of a Minecraft captcha chest UI. "
-                "There is a sign in the middle showing a question or instruction. "
-                "Below it is a row of 7 item slots numbered 0 to 6 from left to right. "
-                "Read the sign question carefully, identify the correct answer item, "
-                "and reply with ONLY a single digit (0-6) — nothing else."
+                "This is a Minecraft captcha. Look at the sign/book in the chest UI — "
+                "it shows a question or asks you to click a specific item. "
+                "There are 7 answer items in a row at the bottom, numbered 0 to 6 left to right. "
+                "What slot number (0-6) is the correct answer? "
+                "Reply with ONLY the single digit number. No other text."
             )
 
             body = json.dumps({
                 "model": "claude-opus-4-5",
-                "max_tokens": 10,
+                "max_tokens": 50,
                 "messages": [{
                     "role": "user",
                     "content": [
@@ -1713,16 +1793,23 @@ class CaptchaSolver:
             req = urllib.request.Request(
                 CAPTCHA_WORKER_URL,
                 data=body,
-                headers={"Content-Type": "application/json"},
+                headers={
+                    "Content-Type": "application/json",
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                    "Accept": "application/json",
+                    "Origin": "https://nebula-captcha.ellieito71.workers.dev"
+                },
                 method="POST"
             )
-            resp = urllib.request.urlopen(req, timeout=15)
-            data = json.loads(resp.read().decode())
+            resp = urllib.request.urlopen(req, timeout=30)
+            raw = resp.read().decode()
+            self._debug(f"WORKER RESPONSE: {raw[:300]}")
+            data = json.loads(raw)
             slot = int(data["content"][0]["text"].strip())
             if 0 <= slot <= 6:
                 return slot
-        except Exception:
-            pass
+        except Exception as e:
+            self._debug(f"WORKER ERROR: {e}")
         return None
 
 
@@ -2900,7 +2987,7 @@ PATCH_NOTES_URL = "https://mewpyyy.github.io/nebula-updates/patch_notes.json"
 SERVER_FILE     = os.path.join(os.path.expanduser("~"), ".ahkmanager_server.json")
 
 PATCH_NOTES = {
-    "1.6.2": [
+    "1.7.7": [
         "Version number now displayed next to the Nebula logo (e.g. Nebula v1.4.6)",
         "App now remembers your last selected server — no need to pick every time",
         "Added 'Change Server' button in the header to return to server selection",
