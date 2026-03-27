@@ -1,6 +1,9 @@
 {
   "1.4.5": [
     "Version number now displayed next to the Nebula logo",
-    "App remembers your last selected server"
+    "App now remembers your last selected server",
+    "Added Change Server button in the header",
+    "Script cards now show a live runtime counter",
+    "Update popup now shows patch notes for the new version"
   ]
 }
