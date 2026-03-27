@@ -11,7 +11,7 @@ import urllib.request
 import urllib.error
 
 # ── Version & auto-update ─────────────────────────────────────────────────────
-CURRENT_VERSION = "1.5.5"
+CURRENT_VERSION = "1.5.6"
 # ▼▼ Replace these URLs with your actual web server paths ▼▼
 UPDATE_VERSION_URL = "https://mewpyyy.github.io/nebula-updates/version.json"
 UPDATE_SCRIPT_URL  = "https://mewpyyy.github.io/nebula-updates/ahk_manager.py"
@@ -1465,50 +1465,74 @@ class CaptchaSolver:
         import time
         import random
         import ctypes
+        import ctypes.wintypes
         self._solving = True
         try:
-            # Step 1 — Release all held keys immediately
-            self._release_all_keys()
+            # Step 1 — Release all held keys/buttons, repeated 3x with small
+            # gaps to ensure AHK held inputs are fully cleared before proceeding
+            for _ in range(3):
+                self._release_all_keys()
+                time.sleep(0.06)
 
-            # Step 2 — Short pause to let UI fully render
-            time.sleep(0.5)
+            # Step 2 — Wait for Minecraft to fully hand cursor control to the
+            # chest UI. Held inputs cause the game to briefly recapture the
+            # mouse even after a chest opens. 1.5s gives the game plenty of
+            # time to settle and fully release cursor capture.
+            time.sleep(1.5)
 
-            # Step 3 — Hover over the sign to render the question tooltip
+            # Step 3 — Glide mouse to the sign position smoothly.
+            # Using small steps prevents the game snapping the cursor back.
             sx, sy = self._get_sign_pos()
-            ctypes.windll.user32.SetCursorPos(sx, sy)
-            time.sleep(0.4)
+            self._glide_mouse(sx, sy)
 
-            # Step 4 — Screenshot the captcha chest area
+            # Step 4 — Verify cursor actually reached the sign (not fought back).
+            # If the game recaptured the mouse the pos will be near screen centre.
+            # Retry up to 3 times with increasing wait if needed.
+            sw = ctypes.windll.user32.GetSystemMetrics(0)
+            sh = ctypes.windll.user32.GetSystemMetrics(1)
+            for attempt in range(3):
+                pos = ctypes.wintypes.POINT()
+                ctypes.windll.user32.GetCursorPos(ctypes.byref(pos))
+                dist = ((pos.x - sx) ** 2 + (pos.y - sy) ** 2) ** 0.5
+                if dist < 40:
+                    break  # cursor is where we want it
+                # Game is still fighting — wait longer and retry
+                time.sleep(0.5 + attempt * 0.3)
+                self._glide_mouse(sx, sy)
+
+            # Step 5 — Hover pause so the sign tooltip fully renders
+            time.sleep(0.6)
+
+            # Step 6 — Screenshot with the tooltip visible
             img_b64 = self._screenshot_captcha()
             if not img_b64:
                 self._solving = False
                 return
 
-            # Step 5 — Human-like delay before answering (4–7 seconds total)
-            # Budget: ~0.9s already spent above. Remaining: 3.1–6.1s
-            # API call takes ~1–2s, so we pre-wait 2–4s then let API fill the rest
-            pre_wait = random.uniform(2.0, 4.0)
+            # Step 7 — Human-like pre-answer delay.
+            # Total target: 4–7s. Already spent ~2.5–3.5s above.
+            # API takes ~1–2s. Pre-wait 0.5–1.5s to land in the window.
+            pre_wait = random.uniform(0.5, 1.5)
             time.sleep(pre_wait)
 
-            # Step 6 — Ask Claude vision which slot to click
+            # Step 8 — Ask Claude vision which slot to click
             slot = self._ask_claude(img_b64)
             if slot is None:
                 self._solving = False
                 return
 
-            # Step 7 — Small extra jitter so total is never suspiciously uniform
-            post_wait = random.uniform(0.2, 0.8)
-            time.sleep(post_wait)
+            # Step 9 — Brief jitter after reading the answer (human pause)
+            time.sleep(random.uniform(0.3, 0.8))
 
-            # Step 8 — Move mouse naturally to slot and click
-            sx2, sy2 = self._get_slot_pos(slot)
-            ctypes.windll.user32.SetCursorPos(sx2, sy2)
+            # Step 10 — Glide to the correct answer slot and click
+            tx, ty = self._get_slot_pos(slot)
+            self._glide_mouse(tx, ty)
             time.sleep(random.uniform(0.1, 0.2))
             ctypes.windll.user32.mouse_event(0x0002, 0, 0, 0, 0)  # LEFT DOWN
-            time.sleep(random.uniform(0.04, 0.09))
+            time.sleep(random.uniform(0.05, 0.10))
             ctypes.windll.user32.mouse_event(0x0004, 0, 0, 0, 0)  # LEFT UP
 
-            # Step 9 — Wait for chest to close then notify manager
+            # Step 11 — Wait for chest to close then notify manager
             time.sleep(1.0)
             self._mgr.after(0, self._mgr._on_captcha_solved)
 
@@ -1523,6 +1547,23 @@ class CaptchaSolver:
         ctypes.windll.user32.mouse_event(0x0010, 0, 0, 0, 0)  # RIGHT UP
         for vk in [0x41, 0x44, 0x57, 0x53]:                   # A D W S
             ctypes.windll.user32.keybd_event(vk, 0, 0x02, 0)
+
+    def _glide_mouse(self, tx, ty, steps=20):
+        """Smoothly move mouse to (tx, ty) in small eased steps.
+        Gradual movement prevents Minecraft briefly recapturing the cursor."""
+        import ctypes
+        import ctypes.wintypes
+        import time
+        pos = ctypes.wintypes.POINT()
+        ctypes.windll.user32.GetCursorPos(ctypes.byref(pos))
+        sx, sy = pos.x, pos.y
+        for i in range(1, steps + 1):
+            t  = i / steps
+            t2 = t * t * (3 - 2 * t)   # smoothstep easing
+            nx = int(sx + (tx - sx) * t2)
+            ny = int(sy + (ty - sy) * t2)
+            ctypes.windll.user32.SetCursorPos(nx, ny)
+            time.sleep(0.012)
 
     def _get_sign_pos(self):
         import ctypes
@@ -2828,7 +2869,7 @@ PATCH_NOTES_URL = "https://mewpyyy.github.io/nebula-updates/patch_notes.json"
 SERVER_FILE     = os.path.join(os.path.expanduser("~"), ".ahkmanager_server.json")
 
 PATCH_NOTES = {
-    "1.5.5": [
+    "1.5.6": [
         "Version number now displayed next to the Nebula logo (e.g. Nebula v1.4.6)",
         "App now remembers your last selected server — no need to pick every time",
         "Added 'Change Server' button in the header to return to server selection",
