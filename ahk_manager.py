@@ -11,7 +11,7 @@ import urllib.request
 import urllib.error
 
 # ── Version & auto-update ─────────────────────────────────────────────────────
-CURRENT_VERSION = "1.5.8"
+CURRENT_VERSION = "1.5.9"
 # ▼▼ Replace these URLs with your actual web server paths ▼▼
 UPDATE_VERSION_URL = "https://mewpyyy.github.io/nebula-updates/version.json"
 UPDATE_SCRIPT_URL  = "https://mewpyyy.github.io/nebula-updates/ahk_manager.py"
@@ -1392,6 +1392,7 @@ class CaptchaSolver:
         self._running = False
         self._thread  = None
         self._solving = False
+        self._debug("CAPTCHASOLVER CREATED")
 
     def start(self):
         if self._running:
@@ -1405,14 +1406,23 @@ class CaptchaSolver:
 
     # ── Detection loop ────────────────────────────────────────────────────────
     def _debug(self, msg):
-        """Append a debug line to the log file on the desktop."""
+        """Append a debug line to the log file — tries multiple locations."""
         import datetime, os
-        try:
-            log = os.path.join(os.path.expanduser("~"), "Desktop", "nebula_captcha_debug.txt")
-            with open(log, "a", encoding="utf-8") as f:
-                f.write(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] {msg}\n")
-        except Exception:
-            pass
+        ts = datetime.datetime.now().strftime("%H:%M:%S")
+        line = f"[{ts}] {msg}\n"
+        # Try several locations so it definitely lands somewhere
+        candidates = [
+            os.path.join(os.path.expanduser("~"), "Desktop", "nebula_captcha_debug.txt"),
+            os.path.join(os.path.expanduser("~"), "nebula_captcha_debug.txt"),
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "nebula_captcha_debug.txt"),
+        ]
+        for path in candidates:
+            try:
+                with open(path, "a", encoding="utf-8") as f:
+                    f.write(line)
+                break
+            except Exception:
+                continue
 
     def _watch_loop(self):
         import time
@@ -2887,7 +2897,7 @@ PATCH_NOTES_URL = "https://mewpyyy.github.io/nebula-updates/patch_notes.json"
 SERVER_FILE     = os.path.join(os.path.expanduser("~"), ".ahkmanager_server.json")
 
 PATCH_NOTES = {
-    "1.5.8": [
+    "1.5.9": [
         "Version number now displayed next to the Nebula logo (e.g. Nebula v1.4.6)",
         "App now remembers your last selected server — no need to pick every time",
         "Added 'Change Server' button in the header to return to server selection",
