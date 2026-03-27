@@ -11,7 +11,7 @@ import urllib.request
 import urllib.error
 
 # ── Version & auto-update ─────────────────────────────────────────────────────
-CURRENT_VERSION = "1.5.1"
+CURRENT_VERSION = "1.5.2"
 # ▼▼ Replace these URLs with your actual web server paths ▼▼
 UPDATE_VERSION_URL = "https://mewpyyy.github.io/nebula-updates/version.json"
 UPDATE_SCRIPT_URL  = "https://mewpyyy.github.io/nebula-updates/ahk_manager.py"
@@ -1192,7 +1192,7 @@ class ToggleSwitch(tk.Frame):
             return
         self._animate_to(pos)
 
-    def _animate_to(self, target_pos, steps=6):
+    def _animate_to(self, target_pos, steps=4):
         start_x = self._knob_x()
         self._pos = target_pos
         end_x = self._knob_x()
@@ -1219,7 +1219,7 @@ class ToggleSwitch(tk.Frame):
         ky = self.PAD
         c.create_oval(kx, ky, kx+ks, ky+ks, fill="#ffffff", outline="#ffffff")
         if step < steps:
-            self._canvas.after(16, lambda: self._anim_step(
+            self._canvas.after(20, lambda: self._anim_step(
                 current_x, end_x, step_size, target_pos, step + 1, steps))
         else:
             self._draw()
@@ -1566,9 +1566,15 @@ class AHKManager(tk.Tk):
         self._container.bind("<Configure>", on_configure)
         self._canvas.bind("<Configure>", lambda e: self._canvas.itemconfig(
             self._canvas_win, width=e.width))
-        self._canvas.bind_all("<MouseWheel>",
-                               lambda e: self._canvas.yview_scroll(
-                                   int(-1 * (e.delta / 120)), "units"))
+        self._last_scroll = 0
+        def _throttled_scroll(e):
+            import time
+            now = time.time()
+            if now - self._last_scroll < 0.03:
+                return
+            self._last_scroll = now
+            self._canvas.yview_scroll(int(-1 * (e.delta / 120)), "units")
+        self._canvas.bind_all("<MouseWheel>", _throttled_scroll)
         self._canvas.configure(height=420)
 
         self._div2 = tk.Frame(self, bg=t["border"], height=1)
@@ -1626,10 +1632,9 @@ class AHKManager(tk.Tk):
             outer.config(highlightbackground=t["border"], highlightthickness=1)
             tog.set_glow(False, None)
 
-        # Bind hover to all widgets inside the card
-        for widget in [outer, inner]:
-            widget.bind("<Enter>", on_enter)
-            widget.bind("<Leave>", on_leave)
+        # Bind hover only to outer frame — inner widgets propagate events up
+        outer.bind("<Enter>", on_enter)
+        outer.bind("<Leave>", on_leave)
 
         # ── Favourite star
         star_char = "★" if is_fav else "☆"
@@ -1639,8 +1644,7 @@ class AHKManager(tk.Tk):
                              cursor="hand2")
         star_lbl.pack(side="left", padx=(0, 8))
         star_lbl.bind("<Button-1>", lambda e, f=fn, sl=star_lbl: self._toggle_fav(f, sl))
-        star_lbl.bind("<Enter>", on_enter)
-        star_lbl.bind("<Leave>", on_leave)
+
 
         left = tk.Frame(inner, bg=t["card_bg"])
         left.pack(side="left", fill="x", expand=True)
@@ -1693,9 +1697,7 @@ class AHKManager(tk.Tk):
                               bg=t["card_bg"], fg=t["subtext"], anchor="w")
         stats_lbl.pack(anchor="w", pady=(1, 0))
 
-        for widget in [left, name_lbl, file_lbl, stats_lbl]:
-            widget.bind("<Enter>", on_enter)
-            widget.bind("<Leave>", on_leave)
+
 
         right = tk.Frame(inner, bg=t["card_bg"])
         right.pack(side="right", padx=(12, 0))
@@ -1710,19 +1712,14 @@ class AHKManager(tk.Tk):
         timer_lbl = tk.Label(right, textvariable=timer_var, font=self.font_file,
                               bg=t["card_bg"], fg=t["subtext"], anchor="e")
         timer_lbl.pack(anchor="e", pady=(0, 4))
-        sl.bind("<Enter>", on_enter)
-        sl.bind("<Leave>", on_leave)
+
 
         tog = ToggleSwitch(right, theme=t,
                            callback=lambda state, i=info, s=sv, l=sl, tg=None:
                                self._toggle(state, i, s, l, tg))
         tog._callback = lambda state, i=info, s=sv, l=sl, tg=tog: self._toggle(state, i, s, l, tg)
         tog.pack(anchor="e")
-        tog._canvas.bind("<Enter>", on_enter)
-        tog._canvas.bind("<Leave>", on_leave)
 
-        right.bind("<Enter>", on_enter)
-        right.bind("<Leave>", on_leave)
 
         return {
             "frame": outer, "inner": inner, "left": left, "right": right,
@@ -1901,38 +1898,37 @@ class AHKManager(tk.Tk):
         prev_stop  = False
         prev_exit  = False
 
+        def _apply(status, fg_key, tog_pos):
+            sv.set(status)
+            sl.config(fg=self._t(fg_key))
+            tog.set_state(tog_pos)
+
         while fn in self.procs:
-            s   = bool(GetAsyncKeyState(vk_start) & 0x8000)
-            st  = bool(GetAsyncKeyState(vk_stop)  & 0x8000)
-            ex  = bool(GetAsyncKeyState(vk_exit)  & 0x8000)
+            s  = bool(GetAsyncKeyState(vk_start) & 0x8000)
+            st = bool(GetAsyncKeyState(vk_stop)  & 0x8000)
+            ex = bool(GetAsyncKeyState(vk_exit)  & 0x8000)
 
             if s and not prev_start:
-                self.after(0, lambda: sv.set("ACTIVE"))
-                self.after(0, lambda: sl.config(fg=self._t("accent")))
-                self.after(0, lambda: tog.set_state(2))
-
-            if st and not prev_stop:
-                self.after(0, lambda: sv.set("PAUSED"))
-                self.after(0, lambda: sl.config(fg=self._t("accent2")))
-                self.after(0, lambda: tog.set_state(1))
-
-            if ex and not prev_exit:
-                self.after(0, lambda: sv.set("STOPPED"))
-                self.after(0, lambda: sl.config(fg=self._t("stopped")))
-                self.after(0, lambda: tog.set_state(0))
+                self.after(0, lambda: _apply("ACTIVE",  "accent",  2))
+            elif st and not prev_stop:
+                self.after(0, lambda: _apply("PAUSED",  "accent2", 1))
+            elif ex and not prev_exit:
+                self.after(0, lambda: _apply("STOPPED", "stopped", 0))
 
             prev_start = s
             prev_stop  = st
             prev_exit  = ex
-            time.sleep(0.05)
+            time.sleep(0.08)
 
     def _watch(self, proc, fn, sv, sl, tog):
         proc.wait()
         if fn in self.procs:
             self.procs.pop(fn, None)
-            self.after(0, lambda: sv.set("STOPPED"))
-            self.after(0, lambda: sl.config(fg=self._t("stopped")))
-            self.after(0, lambda: tog.set_state(0))
+            def _on_stop():
+                sv.set("STOPPED")
+                sl.config(fg=self._t("stopped"))
+                tog.set_state(0)
+            self.after(0, _on_stop)
 
     # ── Search / filter ───────────────────────────────────────────────────────
     def _search_focus_in(self, _=None):
@@ -2515,7 +2511,7 @@ PATCH_NOTES_URL = "https://mewpyyy.github.io/nebula-updates/patch_notes.json"
 SERVER_FILE     = os.path.join(os.path.expanduser("~"), ".ahkmanager_server.json")
 
 PATCH_NOTES = {
-    "1.5.1": [
+    "1.5.2": [
         "Version number now displayed next to the Nebula logo (e.g. Nebula v1.4.6)",
         "App now remembers your last selected server — no need to pick every time",
         "Added 'Change Server' button in the header to return to server selection",
