@@ -11,7 +11,7 @@ import urllib.request
 import urllib.error
 
 # ── Version & auto-update ─────────────────────────────────────────────────────
-CURRENT_VERSION = "1.4.7"
+CURRENT_VERSION = "1.4.8"
 # ▼▼ Replace these URLs with your actual web server paths ▼▼
 UPDATE_VERSION_URL = "https://mewpyyy.github.io/nebula-updates/version.json"
 UPDATE_SCRIPT_URL  = "https://mewpyyy.github.io/nebula-updates/ahk_manager.py"
@@ -1810,6 +1810,7 @@ class AHKManager(tk.Tk):
     def _start(self, info, sv, sl, tog):
         if not self.ahk_path:
             sv.set("NO AHK"); sl.config(fg=self._t("accent2")); return
+        import datetime
         fn = info["filename"]
         tmp = os.path.join(self.tmp_dir, fn)
 
@@ -1830,28 +1831,22 @@ class AHKManager(tk.Tk):
             sv.set("RUNNING"); sl.config(fg=self._t("running"))
             tog.set_state(1)
             # Record stats
-            import datetime
             entry = self._stats.get(fn, {"runs": 0, "last": "never"})
             entry["runs"] += 1
             entry["last"] = datetime.datetime.now().strftime("%d/%m %H:%M")
             self._stats[fn] = entry
             save_stats(self._stats)
-            # Update stats label on card
+            # Update stats label and start runtime timer
+            start_time = datetime.datetime.now()
             for card in self._card_refs:
                 if card["info"]["filename"] == fn:
                     card["stats_lbl"].config(text=f"runs: {entry['runs']}  ·  last: {entry['last']}")
+                    self._run_timer(fn, start_time, card["timer_var"])
                     break
             threading.Thread(target=self._watch, args=(proc, fn, sv, sl, tog),
                              daemon=True).start()
             threading.Thread(target=self._hotkey_monitor, args=(fn, sv, sl, tog),
                              daemon=True).start()
-            # Start runtime timer
-            import datetime
-            start_time = datetime.datetime.now()
-            for card in self._card_refs:
-                if card["info"]["filename"] == fn:
-                    self._run_timer(fn, start_time, card["timer_var"])
-                    break
         except Exception:
             sv.set("ERROR"); sl.config(fg=self._t("accent2"))
 
@@ -2517,7 +2512,7 @@ PATCH_NOTES_URL = "https://mewpyyy.github.io/nebula-updates/patch_notes.json"
 SERVER_FILE     = os.path.join(os.path.expanduser("~"), ".ahkmanager_server.json")
 
 PATCH_NOTES = {
-    "1.4.7": [
+    "1.4.8": [
         "Version number now displayed next to the Nebula logo (e.g. Nebula v1.4.6)",
         "App now remembers your last selected server — no need to pick every time",
         "Added 'Change Server' button in the header to return to server selection",
