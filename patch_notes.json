@@ -1,5 +1,10 @@
 {
-  "1.5.1": [
+  "1.5.2": [
+    "Performance improvements for lower-end systems",
+    "Reduced UI event load — card hover bindings cut by ~85%",
+    "Hotkey monitor now batches UI updates to reduce main thread pressure",
+    "Scroll events throttled to prevent input queue buildup",
+    "Toggle animation optimised — lighter and still smooth",
     "Version number now displayed next to the Nebula logo",
     "App now remembers your last selected server",
     "Added Change Server button in the header",
