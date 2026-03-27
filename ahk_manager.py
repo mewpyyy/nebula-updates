@@ -11,7 +11,7 @@ import urllib.request
 import urllib.error
 
 # ── Version & auto-update ─────────────────────────────────────────────────────
-CURRENT_VERSION = "1.5.3"
+CURRENT_VERSION = "1.5.4"
 # ▼▼ Replace these URLs with your actual web server paths ▼▼
 UPDATE_VERSION_URL = "https://mewpyyy.github.io/nebula-updates/version.json"
 UPDATE_SCRIPT_URL  = "https://mewpyyy.github.io/nebula-updates/ahk_manager.py"
@@ -1683,6 +1683,7 @@ class AHKManager(tk.Tk):
         self._favs     = load_favs()
         self._keybinds = load_keybinds()
         self._opacity  = 1.0
+        self._captcha_enabled = load_captcha_enabled()  # must be set before _build_ui
 
         self._build_fonts()
         self._build_ui()
@@ -1697,8 +1698,7 @@ class AHKManager(tk.Tk):
         threading.Thread(target=self._check_for_update, daemon=True).start()
 
         # Start captcha solver
-        self._captcha_enabled = load_captcha_enabled()
-        self._captcha_solver  = CaptchaSolver(self)
+        self._captcha_solver = CaptchaSolver(self)
         if self._captcha_enabled:
             self._captcha_solver.start()
 
@@ -2828,7 +2828,7 @@ PATCH_NOTES_URL = "https://mewpyyy.github.io/nebula-updates/patch_notes.json"
 SERVER_FILE     = os.path.join(os.path.expanduser("~"), ".ahkmanager_server.json")
 
 PATCH_NOTES = {
-    "1.5.3": [
+    "1.5.4": [
         "Version number now displayed next to the Nebula logo (e.g. Nebula v1.4.6)",
         "App now remembers your last selected server — no need to pick every time",
         "Added 'Change Server' button in the header to return to server selection",
