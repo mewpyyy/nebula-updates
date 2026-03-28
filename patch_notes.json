@@ -1,10 +1,8 @@
 {
-  "1.9.0": [
-    "Added automatic captcha solver — detects captchas while scripts are running",
-    "Held keys are released instantly when a captcha is detected",
-    "AI vision identifies the correct answer and clicks it automatically",
-    "Added Captcha ON/OFF toggle button in the header",
-    "Captcha button flashes a checkmark confirmation after a successful solve",
-    "I would like to mention this is in testing so the auto captcha solver may not work straight away. if you are worried what it may do please click later and i will test it myself"
+  "1.9.1": [
+    "Scripts are now loaded from the cloud rather than being hardcoded into the app — new scripts can be added without needing an update",
+    "Removed the experimental captcha solver feature",
+    "Internal code restructure for improved stability and performance",
+    "Fixed an issue where the app could crash on startup if a leftover update file was present"
   ]
 }
