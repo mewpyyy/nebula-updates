@@ -3,6 +3,7 @@
     "Scripts are now loaded from the cloud rather than being hardcoded into the app — new scripts can be added without needing an update",
     "Removed the experimental captcha solver feature",
     "Internal code restructure for improved stability and performance",
-    "Fixed an issue where the app could crash on startup if a leftover update file was present"
+    "Fixed an issue where the app could crash on startup if a leftover update file was present",
+    "Auto captcha will be attempted to be made via fabric mod in minecraft"
   ]
 }
