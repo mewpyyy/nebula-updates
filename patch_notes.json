@@ -1,5 +1,5 @@
 {
-  "1.9.9": [
+  "2.0.0": [
     "Scripts are now loaded from the cloud rather than being hardcoded into the app — new scripts can be added without needing an update",
     "Removed the experimental captcha solver feature",
     "Internal code restructure for improved stability and performance",
