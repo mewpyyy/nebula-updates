@@ -1,4 +1,4 @@
-"2.1.1": [
+"2.1.2": [
     "User accounts are now stored in the cloud — no more hardcoded passwords",
     "Added account request system on the login screen",
     "Added forgot password link on the login screen",
