@@ -11,7 +11,7 @@ import urllib.request
 import urllib.error
 
 # ── Version & auto-update ─────────────────────────────────────────────────────
-CURRENT_VERSION = "1.8.6"
+CURRENT_VERSION = "1.8.7"
 # ▼▼ Replace these URLs with your actual web server paths ▼▼
 UPDATE_VERSION_URL = "https://mewpyyy.github.io/nebula-updates/version.json"
 UPDATE_SCRIPT_URL  = "https://mewpyyy.github.io/nebula-updates/ahk_manager.py"
@@ -1480,7 +1480,17 @@ class CaptchaSolver:
                 w = rect.right  - rect.left
                 h = rect.bottom - rect.top
                 if w > 400 and h > 300:  # ignore tiny windows
-                    result[0] = (rect.left, rect.top, w, h)
+                    # Clamp to screen bounds — Windows 10 reports negative
+                    # offsets for maximised windows due to invisible borders
+                    x = rect.left
+                    y = rect.top
+                    if x < 0:
+                        w += x  # reduce width by the off-screen amount
+                        x = 0
+                    if y < 0:
+                        h += y  # reduce height by the off-screen amount
+                        y = 0
+                    result[0] = (x, y, w, h)
             return True
 
         ctypes.windll.user32.EnumWindows(EnumWindowsProc(callback), 0)
@@ -3016,7 +3026,7 @@ PATCH_NOTES_URL = "https://mewpyyy.github.io/nebula-updates/patch_notes.json"
 SERVER_FILE     = os.path.join(os.path.expanduser("~"), ".ahkmanager_server.json")
 
 PATCH_NOTES = {
-    "1.8.6": [
+    "1.8.7": [
         "Version number now displayed next to the Nebula logo (e.g. Nebula v1.4.6)",
         "App now remembers your last selected server — no need to pick every time",
         "Added 'Change Server' button in the header to return to server selection",
