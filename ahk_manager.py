@@ -11,7 +11,7 @@ import urllib.request
 import urllib.error
 
 # ── Version & auto-update ─────────────────────────────────────────────────────
-CURRENT_VERSION = "1.8.4"
+CURRENT_VERSION = "1.8.6"
 # ▼▼ Replace these URLs with your actual web server paths ▼▼
 UPDATE_VERSION_URL = "https://mewpyyy.github.io/nebula-updates/version.json"
 UPDATE_SCRIPT_URL  = "https://mewpyyy.github.io/nebula-updates/ahk_manager.py"
@@ -1437,15 +1437,23 @@ class CaptchaSolver:
         import time
         self._debug("SOLVER STARTED")
         last_trigger = 0
+        consecutive = 0
         while self._running:
             try:
                 now = time.time()
                 if self._mgr.procs and not self._solving:
                     if now - last_trigger > 30:  # 30s cooldown between triggers
                         if self._captcha_visible():
-                            self._debug("CAPTCHA DETECTED — starting handler")
-                            last_trigger = now
-                            self._handle_captcha()
+                            consecutive += 1
+                            if consecutive >= 3:  # require 3 consecutive frames (~0.9s)
+                                self._debug("CAPTCHA DETECTED — starting handler")
+                                last_trigger = now
+                                consecutive = 0
+                                self._handle_captcha()
+                        else:
+                            consecutive = 0
+                    else:
+                        consecutive = 0
             except Exception as e:
                 self._debug(f"WATCH LOOP ERROR: {e}")
             time.sleep(0.3)
@@ -1541,13 +1549,16 @@ class CaptchaSolver:
             dark_r   = dark   / total
             mid_r    = mid    / total
 
-            # Detect captcha UI — supports both themes:
-            # Light mode: mid>0.40, bright>0.20 (grey bg, dark text)
-            # Dark mode / mixed: bright>0.15, dark<0.50 (dark bg, bright text)
-            # Friend's setup shows bright=0.229, dark=0.168, mid=0.002
-            light_mode = mid_r > 0.40 and bright_r > 0.20
-            dark_mode  = bright_r > 0.15 and dark_r < 0.50
-            result = light_mode or dark_mode
+            # Detect captcha UI — supports all observed patterns:
+            # Your captcha:        bright=0.229, dark=0.168 → mixed_mode
+            # Friend's captcha:    bright=0.822, dark=0.107 → bright_mode
+            # HUD noise:           bright=0.420, dark=0.580 → filtered (dark too high)
+            # One-frame FP:        bright=0.886, dark=0.018 → caught by consecutive check
+            # Chest UI light bg:   mid>0.40, bright>0.20    → light_mode
+            light_mode  = mid_r > 0.40 and bright_r > 0.20 and dark_r < 0.30
+            bright_mode = bright_r > 0.70 and dark_r < 0.20
+            mixed_mode  = 0.15 < bright_r < 0.50 and 0.10 < dark_r < 0.40
+            result = light_mode or bright_mode or mixed_mode
 
             self._debug(f"DETECT mc=({win_x},{win_y},{win_w}x{win_h}) "
                         f"strip=({strip_x},{strip_y},{strip_w}x{strip_h}) "
@@ -3000,7 +3011,7 @@ PATCH_NOTES_URL = "https://mewpyyy.github.io/nebula-updates/patch_notes.json"
 SERVER_FILE     = os.path.join(os.path.expanduser("~"), ".ahkmanager_server.json")
 
 PATCH_NOTES = {
-    "1.8.4": [
+    "1.8.6": [
         "Version number now displayed next to the Nebula logo (e.g. Nebula v1.4.6)",
         "App now remembers your last selected server — no need to pick every time",
         "Added 'Change Server' button in the header to return to server selection",
