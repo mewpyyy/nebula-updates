@@ -1,20 +1,22 @@
-"2.1.4": [
-    "User accounts are now stored in the cloud — no more hardcoded passwords",
-    "Added account request system on the login screen",
-    "Added forgot password link on the login screen",
-    "Added Change PW button in the app header to request a password reset",
-    "Admin panel now shows which users are online with a green dot",
-    "Admin panel shows last active time for each user",
-    "Admin panel shows which script each user is currently running",
-    "Added kick feature — instantly removes a user from the app",
-    "Added ban feature with custom durations (1hr, 6hr, 24hr, 7 days, 30 days, permanent)",
-    "Scripts are now stored in the cloud instead of GitHub",
-    "Admin can upload new scripts directly from the app without an update",
-    "Admin can enable/disable individual scripts without removing them",
-    "Admin can change which servers each script appears on",
-    "Added script run stats across all users with leaderboard",
-    "Admin can change and reset user passwords from the panel",
-    "Added PW Requests tab — users can request a password reset from the admin",
-    "App automatically logs out after 20 minutes of inactivity if no scripts are running",
-    "What's New popup now appears after each update"
-]
+{
+    "2.1.4": [
+        "User accounts are now stored in the cloud — no more hardcoded passwords",
+        "Added account request system on the login screen",
+        "Added forgot password link on the login screen",
+        "Added Change PW button in the app header to request a password reset",
+        "Admin panel now shows which users are online with a green dot",
+        "Admin panel shows last active time for each user",
+        "Admin panel shows which script each user is currently running",
+        "Added kick feature — instantly removes a user from the app",
+        "Added ban feature with custom durations (1hr, 6hr, 24hr, 7 days, 30 days, permanent)",
+        "Scripts are now stored in the cloud instead of GitHub",
+        "Admin can upload new scripts directly from the app without an update",
+        "Admin can enable/disable individual scripts without removing them",
+        "Admin can change which servers each script appears on",
+        "Added script run stats across all users with leaderboard",
+        "Admin can change and reset user passwords from the panel",
+        "Added PW Requests tab — users can request a password reset from the admin",
+        "App automatically logs out after 20 minutes of inactivity if no scripts are running",
+        "What's New popup now appears after each update"
+    ]
+}
