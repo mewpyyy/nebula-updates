@@ -1,17 +1,6 @@
 {
-    "2.1.6": [
-        "Animated starfield and wave logo on login and server select screens",
-        "Login and server select screens now use your saved theme",
-        "Added Arcane Rift toggle — auto presses Q on a timer, only when Feather Client is focused",
-        "Header buttons reorganised into a Settings dropdown",
-        "Auto Logout is now toggleable with a configurable duration",
-        "Logout button is now bright red for clarity",
-        "Hardware ID locking — accounts are tied to the device they first log in on",
-        "Admin can clear a user's hardware ID from the Users tab",
-        "Help screen updated to cover all features",
-        "Fixed script card hover outline and ? button not updating on theme change",
-        "Blank window simplified to Back and Theme only",
-        "Update popup now appears after login, is draggable and centred on screen",
-        "Pressing Later on update popup now correctly continues to the app"
+    "2.1.7": [
+        "Bug fixes",
+        "Header realignment"
     ]
 }
