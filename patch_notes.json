@@ -1,16 +1,18 @@
 {
-  "2.0.0": [
-    "Initial v2 release",
-    "Nebula Red theme",
-    "Script carousel with slide animation"
-  ],
-  "2.1.0": [
-    "Added Arcane Rift feature",
-    "Custom keybind injection"
-  ],
-  "2.1.8": [
-    "Full admin panel",
-    "Account section with subscription display",
-    "What's New changelog"
+  "2.2.0": [
+    "Complete UI rewrite — pywebview replaces CustomTkinter",
+    "New cosmic nerve tree navigation with animated morph transitions",
+    "Script carousel with slide animation and pixel-art icons",
+    "Arcane Rift automation panel (Prison only)",
+    "Custom keybind injection — change Start, Stop and Exit keys",
+    "Admin panel — Users, Pending, Password Requests, Add User, Subscriptions, Scripts, Stats",
+    "Subscription system — Weekly, Monthly, Yearly and Lifetime plans",
+    "Account section — profile, subscription status, auto-logout, password reset",
+    "Settings — Appearance palette and keybind configuration",
+    "What's New changelog section",
+    "Help section — full guide and Nebulisa AI assistant",
+    "Subscription gate — Scripts and Help locked without active subscription",
+    "Expired subscription message on login",
+    "Starfield background with animated nebula particles"
   ]
 }
