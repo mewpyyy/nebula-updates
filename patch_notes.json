@@ -1,5 +1,16 @@
 {
-    "2.1.8": [
-        "Redesigned structure of the program - curved edges"
-    ]
+  "2.0.0": [
+    "Initial v2 release",
+    "Nebula Red theme",
+    "Script carousel with slide animation"
+  ],
+  "2.1.0": [
+    "Added Arcane Rift feature",
+    "Custom keybind injection"
+  ],
+  "2.1.8": [
+    "Full admin panel",
+    "Account section with subscription display",
+    "What's New changelog"
+  ]
 }
